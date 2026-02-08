@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Dummy package.json to fix CI workflow",
   "scripts": {
-    "build": "echo \"No build script needed\""
+    "build": "echo \"No build script needed\"",
+    "test": "pytest",
+    "lint": "ruff check . && mypy .",
+    "security": "bandit -r hive_zero_core",
+    "ci": "npm run lint && npm run security && npm run test"
   }
 }

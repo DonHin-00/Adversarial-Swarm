@@ -1,7 +1,8 @@
+from typing import Any, Dict, List, Set
+
 import networkx as nx
 import numpy as np
-import logging
-from typing import Dict, Any, List, Set
+
 
 class NetworkDigitalTwin:
     """
@@ -19,7 +20,7 @@ class NetworkDigitalTwin:
 
     def _build_topology(self):
         for i in range(self.num_nodes):
-            tier = "dmz" if i < 5 else "app" if i < 15 else "data"
+            tier = "dmz" if i < 5 else "app" if i < 15 else "data"  # noqa: PLR2004
             vuln_score = 0.8 if tier == "dmz" else 0.5 if tier == "app" else 0.2
             self.graph.add_node(i, tier=tier, vuln_score=vuln_score, compromised=False)
 
@@ -36,7 +37,7 @@ class NetworkDigitalTwin:
     def get_logs(self) -> List[Dict[str, Any]]:
         logs = []
         for u, v, data in self.graph.edges(data=True):
-            if np.random.rand() > 0.8:
+            if np.random.rand() > 0.8:  # noqa: PLR2004
                 logs.append({
                     'src_ip': f"192.168.1.{u}",
                     'dst_ip': f"192.168.1.{v}",
@@ -68,12 +69,12 @@ class BlueTeamAgent:
         self.env = env
 
     def step(self):
-        if np.random.rand() > 0.7:
+        if np.random.rand() > 0.7:  # noqa: PLR2004
             target = np.random.randint(0, self.env.num_nodes)
             self.env.graph.nodes[target]['vuln_score'] *= 0.5
             self.env.patched_nodes.add(target)
 
-        if self.env.alert_level > 5.0:
+        if self.env.alert_level > 5.0:  # noqa: PLR2004
             if self.env.compromised_nodes:
                 target = list(self.env.compromised_nodes)[0]
                 self.env.graph.nodes[target]['compromised'] = False

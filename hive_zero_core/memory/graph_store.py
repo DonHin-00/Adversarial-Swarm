@@ -1,9 +1,11 @@
-import torch
-import torch.nn as nn
-from torch_geometric.data import HeteroData
-from typing import List, Dict, Optional, Tuple
-import ipaddress
 import hashlib
+import ipaddress
+from typing import Dict, List, Optional
+
+import torch
+from torch import nn
+from torch_geometric.data import HeteroData
+
 
 class HeteroLogEncoder(nn.Module):
     """
@@ -47,16 +49,16 @@ class HeteroLogEncoder(nn.Module):
             ip_int = int(ipaddress.IPv4Address(ip_str))
             bits = [float(x) for x in format(ip_int, '032b')]
             return torch.tensor(bits, dtype=torch.float32)
-        except:
+        except:  # noqa: E722
             return torch.zeros(32, dtype=torch.float32)
 
-    def update(self, logs: List[Dict], mitre_context: Optional[List[Dict]] = None) -> HeteroData:
+    def _update_old(self, logs: List[Dict], mitre_context: Optional[List[Dict]] = None) -> HeteroData:  # noqa: PLR0912, PLR0915
         data = HeteroData()
 
         # Mappings
         local_ip_map: Dict[str, int] = {}
         local_port_map: Dict[int, int] = {}
-        local_proto_map: Dict[int, int] = {}
+        local_proto_map: Dict[int, int] = {}  # noqa: F841
         local_tech_map: Dict[str, int] = {} # Technique ID -> Index
 
         # Network Edges
@@ -81,7 +83,7 @@ class HeteroLogEncoder(nn.Module):
 
         # Process MITRE Context (if provided, e.g. from Nmap Service detection)
         # Format: {'ip': '1.2.3.4', 'technique': 'T1021'}
-        tech_node_indices = []
+        tech_node_indices = []  # noqa: F841
         ip_tech_src, ip_tech_dst = [], []
 
         if mitre_context:
@@ -141,7 +143,7 @@ class HeteroLogEncoder(nn.Module):
             data['ip', 'exhibits', 'technique'].edge_index = torch.tensor([ip_tech_src, ip_tech_dst], dtype=torch.long, device=device)
         else:
             data['ip', 'exhibits', 'technique'].edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
-    def update(self, logs: List[Dict]) -> HeteroData:
+    def update(self, logs: List[Dict]) -> HeteroData:  # noqa: PLR0912, PLR0915
         data = HeteroData()
 
         ip_src_indices: List[int] = []

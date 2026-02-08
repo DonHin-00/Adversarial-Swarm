@@ -1,7 +1,8 @@
-import nmap
 import logging
-from typing import List, Dict, Any
-from pathlib import Path
+from typing import Any, Dict, List
+
+import nmap
+
 
 class NmapAdapter:
     def __init__(self):

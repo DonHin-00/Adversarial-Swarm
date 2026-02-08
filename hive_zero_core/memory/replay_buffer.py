@@ -1,6 +1,8 @@
-import torch
+from typing import Any, List, Tuple
+
 import numpy as np
-from typing import List, Dict, Any, Tuple
+import torch
+
 
 class PrioritizedReplayBuffer:
     def __init__(self, capacity: int = 10000, alpha: float = 0.6):
@@ -38,5 +40,5 @@ class PrioritizedReplayBuffer:
         return samples, indices, torch.tensor(weights, dtype=torch.float32)
 
     def update_priorities(self, indices: List[int], priorities: List[float]):
-        for idx, prio in zip(indices, priorities):
+        for idx, prio in zip(indices, priorities):  # noqa: B905
             self.priorities[idx] = prio

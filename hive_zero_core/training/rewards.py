@@ -1,5 +1,6 @@
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
+
 
 class CompositeReward:
     def __init__(self, w_adv: float = 1.0, w_info: float = 0.5, w_stealth: float = 0.8):

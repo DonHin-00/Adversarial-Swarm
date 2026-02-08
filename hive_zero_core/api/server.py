@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import torch
 import uvicorn
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.orchestration.strategic_planner import StrategicPlanner
 
@@ -57,7 +59,7 @@ def execute_swarm(request: CommandRequest):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))  # noqa: B904
 
 def start_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)

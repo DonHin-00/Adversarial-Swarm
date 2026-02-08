@@ -2,6 +2,7 @@ import logging
 import sys
 from pathlib import Path
 
+
 def setup_logger(name: str, log_level: int = logging.INFO) -> logging.Logger:
     """
     Configures a hardened logger with specific formatting and handlers.

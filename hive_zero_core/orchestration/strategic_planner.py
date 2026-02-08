@@ -1,7 +1,9 @@
+from typing import Dict
+
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from typing import Dict, Any
+import torch.nn.functional as F  # noqa: N812
+from torch import nn
+
 
 class StrategicPlanner(nn.Module):
     """

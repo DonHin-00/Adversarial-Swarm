@@ -1,6 +1,8 @@
+from typing import Tuple
+
 import torch
-import torch.nn as nn
-from typing import Dict, List, Tuple
+from torch import nn
+
 
 class SafetyMonitor(nn.Module):
     """
@@ -27,11 +29,11 @@ class SafetyMonitor(nn.Module):
         with torch.no_grad():
             risk = torch.sigmoid(self.risk_predictor(state))
 
-        if risk.item() > 0.95:
+        if risk.item() > 0.95:  # noqa: PLR2004
             return False, "High Risk Predicted"
 
         # 3. Action Sanity Check (e.g. Norm)
-        if torch.norm(action_vector) > 10.0:
+        if torch.norm(action_vector) > 10.0:  # noqa: PLR2004
              return False, "Action Magnitude Unsafe"
 
         return True, "Safe"

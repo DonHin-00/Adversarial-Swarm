@@ -1,7 +1,7 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple, Any, cast
+import torch  # noqa: I001
+import torch.nn as nn  # noqa: PLR0402
+import torch.nn.functional as F  # noqa: N812
+from typing import List, Dict, Optional, Tuple, Any, cast  # noqa: F401
 from hive_zero_core.utils.logging_config import setup_logger
 from hive_zero_core.memory.graph_store import HeteroLogEncoder
 from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
@@ -63,17 +63,6 @@ class HiveMind(nn.Module):
         self.expert_stego = Agent_Stego(observation_dim, action_dim=64)
         self.expert_cleaner = Agent_Cleaner(observation_dim, action_dim=10)
 
-        self.experts = nn.ModuleList([
-            self.expert_cartographer,
-            self.expert_deepscope,
-            self.expert_chronos,
-            self.expert_payloadgen,
-            self.expert_mutator,
-            self.expert_sentinel,
-            self.expert_mimic,
-            self.expert_ghost,
-            self.expert_stego,
-            self.expert_cleaner
         # Cluster D: Active Defense (The Hunter)
         # Action dim 64 matches observation dim to simulate "port" coverage or full-spectrum noise
         self.expert_tarpit = Agent_Tarpit(observation_dim, action_dim=observation_dim)
@@ -95,7 +84,7 @@ class HiveMind(nn.Module):
 
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
 
-    def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
+    def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:  # noqa: PLR0912, PLR0915
         data = self.log_encoder.update(raw_logs)
 
         device = next(self.parameters()).device

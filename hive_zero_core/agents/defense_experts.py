@@ -1,9 +1,12 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from typing import Optional, Dict
 import math
+from typing import Optional
+
+import torch
+import torch.nn.functional as F  # noqa: N812
+from torch import nn
+
 from hive_zero_core.agents.base_expert import BaseExpert
+
 
 class TrapArsenal:
     """
@@ -54,7 +57,7 @@ class TrapArsenal:
     # ... (Conceptually 15+ more variations: Spectral, Null-Pointer, Race-Condition Simulators, etc.)
     # For brevity in prototype, we mix these base primitives to create 20 unique signatures.
 
-class Agent_Tarpit(BaseExpert):
+class Agent_Tarpit(BaseExpert):  # noqa: N801
     """
     Expert 11: The Symbiotic Hunter-Trap.
     Deploys a 'Maximum View' arsenal of 20+ traps simultaneously.
@@ -102,7 +105,7 @@ class Agent_Tarpit(BaseExpert):
                 traps.append(TrapArsenal.resource_nova(batch_size, self.action_dim, device))
 
         # Trap 16-20: Port Maze / Noise
-        for i in range(5):
+        for i in range(5):  # noqa: B007
             traps.append(TrapArsenal.port_maze_noise(batch_size, self.action_dim, device))
 
         # Stack: [Batch, Num_Traps, Action_Dim]

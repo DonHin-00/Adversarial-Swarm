@@ -1,6 +1,8 @@
 import logging
+from typing import Any, Dict, List
+
 from mitreattack.stix20 import MitreAttackData
-from typing import Dict, List, Any
+
 
 class MitreKnowledgeBase:
     """
