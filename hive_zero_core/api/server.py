@@ -4,12 +4,13 @@ from typing import List, Dict, Any, Optional
 import torch
 import uvicorn
 import asyncio
-import json
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.orchestration.strategic_planner import StrategicPlanner
 from hive_zero_core.orchestration.safety_monitor import SafetyMonitor
+from hive_zero_core.comms.uplink import uplink_router
 
 app = FastAPI(title="HIVE-ZERO C2 Interface")
+app.include_router(uplink_router)
 
 hive = HiveMind(observation_dim=64)
 planner = StrategicPlanner(observation_dim=64)
@@ -48,11 +49,6 @@ async def broadcast_status(data: Dict):
 
 @app.get("/graph/viz")
 def get_graph_viz():
-    # Return last processed graph structure
-    # We need access to the data object or store it in hive.
-    # Assuming hive.log_encoder stores maps from last update.
-    # But we need 'data' object.
-    # Ideally store last_data in hive state.
     if hasattr(hive, 'last_data'):
         return hive.log_encoder.to_cytoscape_json(hive.last_data)
     return {"nodes": [], "edges": []}
@@ -67,7 +63,7 @@ async def execute_swarm(request: CommandRequest):
 
     try:
         data = hive.log_encoder.update(raw_logs)
-        hive.last_data = data # Cache for viz
+        hive.last_data = data
 
         device = next(hive.parameters()).device
         if 'ip' in data.node_types and hasattr(data['ip'], 'x') and data['ip'].x.size(0) > 0:
