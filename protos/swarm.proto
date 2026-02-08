@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+service SwarmService {
+  rpc ShareKnowledge (KnowledgeUpdate) returns (Ack) {}
+  rpc SyncState (StateRequest) returns (GlobalState) {}
+}
+
+message KnowledgeUpdate {
+  string source_id = 1;
+  bytes embedding = 2;
+  repeated string discovered_nodes = 3;
+}
+
+message Ack {
+  bool success = 1;
+}
+
+message StateRequest {
+  string requester_id = 1;
+}
+
+message GlobalState {
+  bytes aggregated_embedding = 1;
+  int32 active_experts = 2;
+}
