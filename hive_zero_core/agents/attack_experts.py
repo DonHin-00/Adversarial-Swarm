@@ -5,55 +5,51 @@ import torch.nn.functional as F
 from typing import Optional, Dict, Tuple, List, Union
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
-import random
 import math
 
 class Agent_Sentinel(BaseExpert):
     """
-    Expert 6: Ensemble Discriminator
-    Runs 3 distinct BERT models (mocked as one model with 3 heads/perturbations for prototype)
-    and votes on the outcome.
+    Expert 6: Stateful Ensemble Discriminator
+    Uses a history GRU to model alert thresholds across sequences.
     """
     def __init__(self, observation_dim: int, action_dim: int, model_name: str = "prajjwal1/bert-tiny", hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            # Ensemble of 3 heads on top of shared base
             self.backbone = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=hidden_dim, output_hidden_states=True)
 
-            # 3 Expert Heads
+            # Ensemble Heads
             self.head1 = nn.Linear(hidden_dim, 2)
             self.head2 = nn.Linear(hidden_dim, 2)
             self.head3 = nn.Linear(hidden_dim, 2)
+
+            # Stateful Threshold Modeling
+            self.history_gru = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
 
         except Exception as e:
             self.logger.error(f"Failed to load Sentinel: {e}")
             raise e
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # 1. Base Features
         # x: [Batch, Seq, Dim] or [Batch, Seq]
-
         if x.dim() == 3 and x.shape[-1] > 1:
              outputs = self.backbone(inputs_embeds=x)
         else:
              outputs = self.backbone(input_ids=x.long())
 
-        # Backbone outputs [Batch, hidden_dim] because num_labels=hidden_dim
-        features = F.relu(outputs.logits)
+        features = F.relu(outputs.logits) # [Batch, hidden_dim]
 
-        # 2. Ensemble Voting
-        logits1 = self.head1(features)
-        logits2 = self.head2(features)
-        logits3 = self.head3(features)
+        # Stateful refinement
+        h_seq = features.unsqueeze(1)
+        h_out, _ = self.history_gru(h_seq)
+        refined_features = h_out.squeeze(1)
 
-        probs1 = torch.softmax(logits1, dim=-1)
-        probs2 = torch.softmax(logits2, dim=-1)
-        probs3 = torch.softmax(logits3, dim=-1)
+        # Ensemble Voting
+        logits1 = self.head1(refined_features)
+        logits2 = self.head2(refined_features)
+        logits3 = self.head3(refined_features)
 
-        # Average probability (Soft Voting)
-        avg_probs = (probs1 + probs2 + probs3) / 3.0
-
+        avg_probs = (torch.softmax(logits1, -1) + torch.softmax(logits2, -1) + torch.softmax(logits3, -1)) / 3.0
         return avg_probs
 
 class Agent_PayloadGen(BaseExpert):
@@ -112,86 +108,50 @@ class Agent_PayloadGen(BaseExpert):
 
 class Agent_Mutator(BaseExpert):
     """
-    Expert 5: MCTS Mutator
-    Uses Monte Carlo Tree Search to plan discrete mutations.
+    Expert 5: Hybrid Search Mutator
+    Implements Inference-Time Search using gradient descent + noise injection.
+    Optimizes payloads to evade Agent_Sentinel.
     """
     def __init__(self, observation_dim: int, action_dim: int, sentinel_expert: BaseExpert, generator_expert: BaseExpert, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
         self.sentinel = sentinel_expert
         self.generator = generator_expert
 
-    class Node:
-        def __init__(self, state, parent=None):
-            self.state = state # Embedding tensor
-            self.parent = parent
-            self.children = []
-            self.visits = 0
-            self.value = 0.0
+    def _inner_loop_search(self, embedding: torch.Tensor, iterations: int = 5) -> torch.Tensor:
+        # embedding: [1, seq, dim]
+        optimized_emb = embedding.clone().detach().requires_grad_(True)
+        optimizer = optim.SGD([optimized_emb], lr=0.01)
 
-    def _evaluate(self, embedding):
-        # We need to detach embedding to avoid gradient graph issues in MCTS?
-        # Actually MCTS is non-differentiable search.
-        with torch.no_grad():
-            probs = self.sentinel._forward_impl(embedding, context=None)
-        return probs[:, 1].item() # P(Allowed)
+        for _ in range(iterations):
+            optimizer.zero_grad()
+            # We want to MAXIMIZE probability of evasion (P(Allowed))
+            probs = self.sentinel(optimized_emb)
+            loss = -torch.log(probs[:, 1] + 1e-8).mean()
+            loss.backward()
+            optimizer.step()
 
-    def _expand(self, node):
-        for _ in range(3):
-            # Noise in embedding space as "actions"
-            noise = torch.randn_like(node.state) * 0.1
-            child_state = node.state + noise
-            child = self.Node(child_state, parent=node)
-            node.children.append(child)
+            # Discrete Noise Injection (Hybrid)
+            with torch.no_grad():
+                noise = torch.randn_like(optimized_emb) * 0.05
+                optimized_emb.add_(noise)
 
-    def _run_mcts(self, root_embedding, simulations=5):
-        root = self.Node(root_embedding)
-
-        for _ in range(simulations):
-            # Selection
-            node = root
-            # Simple Selection: just pick random if exists or expand
-            if node.children:
-                 # UCB
-                 node = max(node.children, key=lambda c: c.value / (c.visits + 1e-6) + 2.0 * math.sqrt(math.log(root.visits + 1) / (c.visits + 1e-6)))
-
-            # Expansion
-            if node.visits > 0 or not node.children:
-                self._expand(node)
-                if node.children:
-                    node = random.choice(node.children)
-
-            # Simulation/Evaluation
-            score = self._evaluate(node.state)
-
-            # Backprop
-            curr = node
-            while curr:
-                curr.visits += 1
-                curr.value += score
-                curr = curr.parent
-
-        best_child = max(root.children, key=lambda c: c.visits) if root.children else root
-        return best_child.state
+        return optimized_emb.detach()
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # 1. Initial Generation
+        # 1. Base Generation
         with torch.no_grad():
-            initial_token_ids = self.generator._forward_impl(x, context)
+            gen_out = self.generator(x, context)
+            # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
+            # gen_out shape: [Batch, Seq]
+            gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
+            # Re-encode for Sentinel (BERT)
+            sentinel_inputs = self.sentinel.tokenizer(gen_text, return_tensors="pt", padding=True, truncation=True).to(x.device)
+            initial_token_ids = sentinel_inputs["input_ids"]
 
         embed_layer = self.sentinel.backbone.get_input_embeddings()
-        vocab_size = self.sentinel.backbone.config.vocab_size
-        initial_token_ids = torch.clamp(initial_token_ids.long(), 0, vocab_size - 1)
-
-        if initial_token_ids.shape[-1] > 512:
-             initial_token_ids = initial_token_ids[:, :512]
-
         current_embeddings = embed_layer(initial_token_ids).detach()
 
-        # 2. MCTS Optimization
+        # 2. Inference-Time Search
         if current_embeddings.size(0) == 1:
-            optimized_embeddings = self._run_mcts(current_embeddings)
-        else:
-            # Fallback for batch > 1
-            optimized_embeddings = current_embeddings
-
-        return optimized_embeddings
+            return self._inner_loop_search(current_embeddings)
+        return current_embeddings
