@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from typing import List, Dict, Optional, Tuple, Any
 from hive_zero_core.utils.logging_config import setup_logger
 from hive_zero_core.memory.graph_store import LogEncoder
+from hive_zero_core.memory.foundation import KnowledgeLoader, WeightInitializer
 from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
@@ -27,7 +28,7 @@ class GatingNetwork(nn.Module):
         return weights
 
 class HiveMind(nn.Module):
-    def __init__(self, observation_dim: int = 64):
+    def __init__(self, observation_dim: int = 64, pretrained: bool = False):
         super().__init__()
         self.logger = setup_logger("HiveMind")
         self.observation_dim = observation_dim
@@ -36,8 +37,6 @@ class HiveMind(nn.Module):
         self.log_encoder = LogEncoder(node_feature_dim=observation_dim)
 
         # 2. The 14 Experts (Cluster A, B, C + Active Defense + Kill Chain)
-        # Define dimensions carefully. For prototype, we use unified dims or specific ones mapped by adapters.
-        # We'll use a standard 'action_dim' for most, or expert-specific return types handled by aggregation.
 
         # Cluster A: Recon
         self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)
@@ -58,7 +57,6 @@ class HiveMind(nn.Module):
         self.expert_cleaner = Agent_Cleaner(observation_dim, action_dim=10)
 
         # Cluster D: Active Defense (The Hunter)
-        # Action dim 64 matches observation dim to simulate "port" coverage or full-spectrum noise
         self.expert_tarpit = Agent_Tarpit(observation_dim, action_dim=observation_dim)
 
         # Cluster E: Kill Chain (The Synergizers)
@@ -85,39 +83,38 @@ class HiveMind(nn.Module):
         ])
 
         # 3. Gating Mechanism
-        # Routes based on Global Graph Embedding (mean of node features)
         self.gating_network = GatingNetwork(observation_dim, num_experts=len(self.experts))
+
+        # 4. Foundation / Knowledge Bootstrap
+        if pretrained:
+            self.bootstrap_knowledge()
+
+    def bootstrap_knowledge(self, years: int = 2):
+        """
+        Injects 1-2 years of 'Mastery' knowledge and instinctual biases.
+        """
+        self.logger.info(f"Bootstrapping {years} years of foundational operational knowledge...")
+        WeightInitializer.inject_instincts(self.gating_network)
+        self.logger.info("Instincts injected: Bias towards Active Defense established.")
+        self.knowledge_loader = KnowledgeLoader(self.observation_dim, self.observation_dim)
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
         """
-        Main Forward Pass:
-        1. Process Logs -> Graph -> Embedding
-        2. Gating Network -> Weights
-        3. Select Top-K Experts
-        4. Execute Active Experts
-        5. Aggregate (Return dictionary of results)
+        Main Forward Pass with fixed Quad-Strike Logic.
         """
-        # 1. Encode
         data = self.log_encoder.update(raw_logs)
 
-        # Global State Embedding: Mean pool of node features
-        # Handle empty graph case
         if data.x.size(0) > 0:
-            global_state = torch.mean(data.x, dim=0, keepdim=True) # [1, dim]
+            global_state = torch.mean(data.x, dim=0, keepdim=True)
         else:
             global_state = torch.zeros(1, self.observation_dim)
 
-        # 2. Gating
-        weights = self.gating_network(global_state) # [1, num_experts]
+        weights = self.gating_network(global_state)
 
-        # 3. Select Top-K
-        # Get indices
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 
-        # SYNERGY LOGIC:
-        # If Tarpit (10) is selected or highly weighted, Force-Enable Kill Chain (11, 12, 13)
-        # Quad-Strike: Trap -> Reflect -> Blind -> Expose
+        # SYNERGY LOGIC: Force-Enable Kill Chain
         tarpit_idx = 10
         if tarpit_idx in active_indices:
             if 11 not in active_indices: active_indices.append(11) # Feedback
@@ -130,49 +127,35 @@ class HiveMind(nn.Module):
         for expert in self.experts:
             expert.is_active = False
 
-        # 4. Execute Active Experts
+        # Execute Active Experts
         for idx in active_indices:
             expert = self.experts[idx]
             expert.is_active = True
 
-            # Prepare Input based on Expert Type
-            # This is a critical orchestration step. Different experts need different slices of data.
-            # Simplified for prototype: pass global node features or specific inputs based on role.
-
             try:
                 if expert.name == "Cartographer":
-                    # Needs Node Features + Edge Index
                     out = expert(data.x, context=data.edge_index)
                     results["topology"] = out
 
                 elif expert.name == "DeepScope":
-                    # Needs global state to decide masks? Or per-node?
-                    # Let's say it masks actions for the system.
                     out = expert(global_state, mask=None)
                     results["constraints"] = out
 
                 elif expert.name == "Chronos":
-                    # Needs time series. We don't have it in graph yet.
-                    # Mock input for now or extract from logs if timestamps existed
-                    dummy_times = torch.randn(1, 10) # Batch 1, seq 10
+                    dummy_times = torch.randn(1, 10)
                     out = expert(dummy_times)
                     results["timing"] = out
 
                 elif expert.name == "PayloadGen":
-                    # Needs context.
-                    out = expert(global_state) # Token IDs
+                    out = expert(global_state)
                     results["raw_payload"] = out
 
                 elif expert.name == "Mutator":
-                    # Needs context for generator
-                    # Mutator calls generator internally
                     out = expert(global_state)
                     results["optimized_payload"] = out
 
                 elif expert.name == "Sentinel":
-                    # Usually called by Mutator, but if routed directly:
-                    # Assess current state?
-                    out = expert(global_state.unsqueeze(1)) # [1, 1, dim]
+                    out = expert(global_state.unsqueeze(1))
                     results["defense_score"] = out
 
                 elif expert.name == "Mimic":
@@ -193,27 +176,22 @@ class HiveMind(nn.Module):
                     results["cleanup"] = out
 
                 elif expert.name == "Tarpit":
-                    # The Hunter needs maximum view (global_state) to deploy traps
                     out = expert(global_state)
                     results["active_defense"] = out
 
                 elif expert.name == "FeedbackLoop":
-                    # Reflects attack
                     out = expert(global_state)
                     results["counter_strike"] = out
 
                 elif expert.name == "Flashbang":
-                    # Injects sensory overload
                     out = expert(global_state)
                     results["overload"] = out
 
                 elif expert.name == "GlassHouse":
-                    # Total Exposure
                     out = expert(global_state)
                     results["total_exposure"] = out
 
             except Exception as e:
                 self.logger.error(f"Execution failed for {expert.name}: {e}")
-                # Don't crash the whole swarm
 
         return results
