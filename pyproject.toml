@@ -1,21 +1,20 @@
-[tool.ruff]
-line-length = 120
-select = ["E", "F", "B", "I", "N", "PL"]
-ignore = ["E501"]  # Line length is handled by black/formatter
+[tool.black]
+line-length = 100
+target-version = ['py310']
+include = '\.pyi?$'
 
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-ignore_missing_imports = true
-check_untyped_defs = true
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
 
-[tool.bandit]
-exclude_dirs = ["tests"]
-skips = ["B101"]  # assert is used in tests, but we're excluding tests anyway
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=hive_zero_core"
+testpaths = [
+    "tests",
+]
 
-# Relax mypy for existing codebase
-[[tool.mypy.overrides]]
-module = ["hive_zero_core.*"]
-disallow_untyped_defs = false
+[tool.coverage.run]
+source = ["hive_zero_core"]
+omit = ["tests/*"]
