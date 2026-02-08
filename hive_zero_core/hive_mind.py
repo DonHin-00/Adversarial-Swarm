@@ -7,6 +7,8 @@ from hive_zero_core.memory.graph_store import HeteroLogEncoder
 from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
+from hive_zero_core.agents.defense_experts import Agent_Tarpit
+from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
 from hive_zero_core.agents.base_expert import BaseExpert
 from hive_zero_core.agents.defense_experts import Agent_Tarpit
 
@@ -41,6 +43,7 @@ class HiveMind(nn.Module):
 
         self.log_encoder = HeteroLogEncoder(node_embed_dim=observation_dim)
 
+        # 2. The 14 Experts (Cluster A, B, C + Active Defense + Kill Chain)
         # 2. The 11 Experts (Cluster A, B, C + Active Defense)
         # Define dimensions carefully. For prototype, we use unified dims or specific ones mapped by adapters.
         # We'll use a standard 'action_dim' for most, or expert-specific return types handled by aggregation.
@@ -78,6 +81,11 @@ class HiveMind(nn.Module):
         # Action dim 64 matches observation dim to simulate "port" coverage or full-spectrum noise
         self.expert_tarpit = Agent_Tarpit(observation_dim, action_dim=observation_dim)
 
+        # Cluster E: Kill Chain (The Synergizers)
+        self.expert_feedback = Agent_FeedbackLoop(observation_dim, action_dim=observation_dim)
+        self.expert_flashbang = Agent_Flashbang(observation_dim, action_dim=observation_dim)
+        self.expert_glasshouse = Agent_GlassHouse(observation_dim, action_dim=observation_dim)
+
         # Order matters for indexing in GatingNetwork outputs
         self.experts = nn.ModuleList([
             self.expert_cartographer, # 0
@@ -90,6 +98,10 @@ class HiveMind(nn.Module):
             self.expert_ghost,        # 7
             self.expert_stego,        # 8
             self.expert_cleaner,      # 9
+            self.expert_tarpit,       # 10
+            self.expert_feedback,     # 11
+            self.expert_flashbang,    # 12
+            self.expert_glasshouse    # 13
             self.expert_tarpit        # 10
         ])
 
@@ -109,6 +121,16 @@ class HiveMind(nn.Module):
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 
+        # SYNERGY LOGIC:
+        # If Tarpit (10) is selected or highly weighted, Force-Enable Kill Chain (11, 12, 13)
+        # Quad-Strike: Trap -> Reflect -> Blind -> Expose
+        tarpit_idx = 10
+        if tarpit_idx in active_indices:
+            if 11 not in active_indices: active_indices.append(11) # Feedback
+            if 12 not in active_indices: active_indices.append(12) # Flashbang
+            if 13 not in active_indices: active_indices.append(13) # GlassHouse
+
+        results = {}
         results: Dict[str, Any] = {}
 
         for module in self.experts:
@@ -167,6 +189,21 @@ class HiveMind(nn.Module):
                     # The Hunter needs maximum view (global_state) to deploy traps
                     out = expert(global_state)
                     results["active_defense"] = out
+
+                elif expert.name == "FeedbackLoop":
+                    # Reflects attack
+                    out = expert(global_state)
+                    results["counter_strike"] = out
+
+                elif expert.name == "Flashbang":
+                    # Injects sensory overload
+                    out = expert(global_state)
+                    results["overload"] = out
+
+                elif expert.name == "GlassHouse":
+                    # Total Exposure
+                    out = expert(global_state)
+                    results["total_exposure"] = out
 
             except Exception as e:
                 self.logger.error(f"Execution failed for {expert.name}: {e}")
