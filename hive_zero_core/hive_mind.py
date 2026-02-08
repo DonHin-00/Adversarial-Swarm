@@ -1,30 +1,39 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, cast
 from hive_zero_core.utils.logging_config import setup_logger
-from hive_zero_core.memory.graph_store import LogEncoder
+from hive_zero_core.memory.graph_store import HeteroLogEncoder
 from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
 from hive_zero_core.agents.defense_experts import Agent_Tarpit
 from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
+from hive_zero_core.agents.base_expert import BaseExpert
+from hive_zero_core.agents.defense_experts import Agent_Tarpit
 
-class GatingNetwork(nn.Module):
-    def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64):
+class NoisyGatingNetwork(nn.Module):
+    def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64, noise_epsilon: float = 1e-2):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, num_experts)
-        )
+        self.num_experts = num_experts
+        self.noise_epsilon = noise_epsilon
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: Global state/context embedding
-        logits = self.net(x)
-        # Softmax for weights
+        self.w_gating = nn.Linear(input_dim, num_experts)
+        self.w_noise = nn.Linear(input_dim, num_experts)
+
+    def forward(self, x: torch.Tensor, training: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
+        clean_logits = self.w_gating(x)
+
+        if training:
+            raw_noise_std = self.w_noise(x)
+            noise_std = F.softplus(raw_noise_std)
+            noise = torch.randn_like(clean_logits) * noise_std
+            logits = clean_logits + noise
+        else:
+            logits = clean_logits
+
         weights = F.softmax(logits, dim=-1)
-        return weights
+        return weights, logits
 
 class HiveMind(nn.Module):
     def __init__(self, observation_dim: int = 64):
@@ -32,21 +41,21 @@ class HiveMind(nn.Module):
         self.logger = setup_logger("HiveMind")
         self.observation_dim = observation_dim
 
-        # 1. Shared Latent Space / Data Layer
-        self.log_encoder = LogEncoder(node_feature_dim=observation_dim)
+        self.log_encoder = HeteroLogEncoder(node_embed_dim=observation_dim)
 
         # 2. The 14 Experts (Cluster A, B, C + Active Defense + Kill Chain)
+        # 2. The 11 Experts (Cluster A, B, C + Active Defense)
         # Define dimensions carefully. For prototype, we use unified dims or specific ones mapped by adapters.
         # We'll use a standard 'action_dim' for most, or expert-specific return types handled by aggregation.
 
         # Cluster A: Recon
         self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)
-        self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10) # 10 discrete actions?
-        self.expert_chronos = Agent_Chronos(1, action_dim=1) # Time input
+        self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10)
+        self.expert_chronos = Agent_Chronos(1, action_dim=1)
 
         # Cluster B: Attack
         self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
-        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128) # Seq len
+        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)
         self.expert_mutator = Agent_Mutator(observation_dim, action_dim=128,
                                            sentinel_expert=self.expert_sentinel,
                                            generator_expert=self.expert_payloadgen)
@@ -57,6 +66,17 @@ class HiveMind(nn.Module):
         self.expert_stego = Agent_Stego(observation_dim, action_dim=64)
         self.expert_cleaner = Agent_Cleaner(observation_dim, action_dim=10)
 
+        self.experts = nn.ModuleList([
+            self.expert_cartographer,
+            self.expert_deepscope,
+            self.expert_chronos,
+            self.expert_payloadgen,
+            self.expert_mutator,
+            self.expert_sentinel,
+            self.expert_mimic,
+            self.expert_ghost,
+            self.expert_stego,
+            self.expert_cleaner
         # Cluster D: Active Defense (The Hunter)
         # Action dim 64 matches observation dim to simulate "port" coverage or full-spectrum noise
         self.expert_tarpit = Agent_Tarpit(observation_dim, action_dim=observation_dim)
@@ -82,36 +102,22 @@ class HiveMind(nn.Module):
             self.expert_feedback,     # 11
             self.expert_flashbang,    # 12
             self.expert_glasshouse    # 13
+            self.expert_tarpit        # 10
         ])
 
-        # 3. Gating Mechanism
-        # Routes based on Global Graph Embedding (mean of node features)
-        self.gating_network = GatingNetwork(observation_dim, num_experts=len(self.experts))
+        self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
-        """
-        Main Forward Pass:
-        1. Process Logs -> Graph -> Embedding
-        2. Gating Network -> Weights
-        3. Select Top-K Experts
-        4. Execute Active Experts
-        5. Aggregate (Return dictionary of results)
-        """
-        # 1. Encode
         data = self.log_encoder.update(raw_logs)
 
-        # Global State Embedding: Mean pool of node features
-        # Handle empty graph case
-        if data.x.size(0) > 0:
-            global_state = torch.mean(data.x, dim=0, keepdim=True) # [1, dim]
+        device = next(self.parameters()).device
+        if 'ip' in data.node_types and hasattr(data['ip'], 'x') and data['ip'].x.size(0) > 0:
+            global_state = torch.mean(data['ip'].x, dim=0, keepdim=True)
         else:
-            global_state = torch.zeros(1, self.observation_dim)
+            global_state = torch.zeros(1, self.observation_dim, device=device)
 
-        # 2. Gating
-        weights = self.gating_network(global_state) # [1, num_experts]
+        weights, logits = self.gating_network(global_state, training=self.training)
 
-        # 3. Select Top-K
-        # Get indices
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 
@@ -125,54 +131,41 @@ class HiveMind(nn.Module):
             if 13 not in active_indices: active_indices.append(13) # GlassHouse
 
         results = {}
+        results: Dict[str, Any] = {}
 
-        # Reset all to inactive
-        for expert in self.experts:
+        for module in self.experts:
+            expert = cast(BaseExpert, module)
             expert.is_active = False
 
-        # 4. Execute Active Experts
         for idx in active_indices:
-            expert = self.experts[idx]
+            module = self.experts[idx]
+            expert = cast(BaseExpert, module)
             expert.is_active = True
-
-            # Prepare Input based on Expert Type
-            # This is a critical orchestration step. Different experts need different slices of data.
-            # Simplified for prototype: pass global node features or specific inputs based on role.
 
             try:
                 if expert.name == "Cartographer":
-                    # Needs Node Features + Edge Index
-                    out = expert(data.x, context=data.edge_index)
+                    out = expert(data)
                     results["topology"] = out
 
                 elif expert.name == "DeepScope":
-                    # Needs global state to decide masks? Or per-node?
-                    # Let's say it masks actions for the system.
-                    out = expert(global_state, mask=None)
+                    out = expert(global_state)
                     results["constraints"] = out
 
                 elif expert.name == "Chronos":
-                    # Needs time series. We don't have it in graph yet.
-                    # Mock input for now or extract from logs if timestamps existed
-                    dummy_times = torch.randn(1, 10) # Batch 1, seq 10
+                    dummy_times = torch.randn(1, 10, device=global_state.device)
                     out = expert(dummy_times)
                     results["timing"] = out
 
                 elif expert.name == "PayloadGen":
-                    # Needs context.
-                    out = expert(global_state) # Token IDs
+                    out = expert(global_state)
                     results["raw_payload"] = out
 
                 elif expert.name == "Mutator":
-                    # Needs context for generator
-                    # Mutator calls generator internally
                     out = expert(global_state)
                     results["optimized_payload"] = out
 
                 elif expert.name == "Sentinel":
-                    # Usually called by Mutator, but if routed directly:
-                    # Assess current state?
-                    out = expert(global_state.unsqueeze(1)) # [1, 1, dim]
+                    out = expert(global_state.unsqueeze(1))
                     results["defense_score"] = out
 
                 elif expert.name == "Mimic":
@@ -184,7 +177,7 @@ class HiveMind(nn.Module):
                     results["hiding_spot"] = out
 
                 elif expert.name == "Stego":
-                    dummy_data = torch.rand(1, self.observation_dim)
+                    dummy_data = torch.rand(1, self.observation_dim, device=global_state.device)
                     out = expert(dummy_data)
                     results["covert_channel"] = out
 
@@ -214,6 +207,6 @@ class HiveMind(nn.Module):
 
             except Exception as e:
                 self.logger.error(f"Execution failed for {expert.name}: {e}")
-                # Don't crash the whole swarm
 
+        results["gating_weights"] = weights
         return results

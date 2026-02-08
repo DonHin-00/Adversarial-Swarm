@@ -2,96 +2,155 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import logging
+import numpy as np
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.training.rewards import CompositeReward
+from hive_zero_core.memory.replay_buffer import PrioritizedReplayBuffer
+from hive_zero_core.environment.hive_env import PenTestEnv
+from hive_zero_core.environment.hive_env import HiveZeroEnv
 
-def train_hive_mind_adversarial(num_epochs: int = 10):
+def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
     logger = logging.getLogger("HiveTraining")
     logger.setLevel(logging.INFO)
 
-    # 1. Initialize HiveMind
+    # 1. HiveMind Agent
+    # 1. Initialize HiveMind (The Agent)
     hive = HiveMind(observation_dim=64)
-    # Move to GPU if available (internal experts handle device, but parent should coordinate)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     hive.to(device)
+    hive.train()
 
-    # 2. Optimizer
-    # Only optimize Gating Network + Learnable Experts (excluding Sentinel/PayloadGen maybe?)
-    # For Adversarial Loop, we mainly train Gating + Mutator + Recon/Post?
-    # Sentinel and PayloadGen might be frozen or pre-trained.
+    # 2. Real PenTest Environment
+    env = PenTestEnv(observation_dim=64)
+    # 2. Initialize Environment (The Target)
+    env = HiveZeroEnv(observation_dim=64)
 
-    # Trainable parameters
+    # 3. Optimizer
     params = list(hive.gating_network.parameters())
-    # Add expert parameters (e.g. adapters)
     for expert in hive.experts:
-        if expert.name == "Mutator":
-            # Mutator optimizes at inference time usually,
-            # but might have learnable policy/value net (PPO) if implemented fully.
+        if hasattr(expert, 'parameters'):
+             params.extend(list(expert.parameters()))
+        if expert.name == "Sentinel":
+            # Sentinel is part of the 'Blue Team' logic, implicitly trained or pre-trained.
+            # Here we might freeze it or train it adversarially.
             pass
-        elif expert.name in ["Cartographer", "DeepScope", "Mimic", "Ghost"]:
+        elif expert.name in ["Cartographer", "DeepScope", "Mimic", "Ghost", "Chronos", "PayloadGen", "Cleaner", "Stego"]:
+            # Note: PayloadGen has fixed RAG DB but trainable generator parts if any
             params.extend(list(expert.parameters()))
 
     optimizer = optim.Adam(params, lr=0.001)
 
-    # 3. Reward Function
-    reward_calc = CompositeReward()
-
     # 4. Training Loop
     for epoch in range(num_epochs):
-        optimizer.zero_grad()
+        obs_np, _ = env.reset()
+        done = False
+        total_reward = 0.0
+        # Reset Env
+        obs_np, _ = env.reset()
 
-        # --- Environment Step (Mocked) ---
-        # Generate random logs to simulate observation
-        mock_logs = [
-            {'src_ip': '192.168.1.1', 'dst_ip': '10.0.0.5', 'port': 80, 'proto': 6},
-            {'src_ip': '10.0.0.5', 'dst_ip': '8.8.8.8', 'port': 53, 'proto': 17}
-        ]
+        # Episode Loop
+        total_episode_reward = 0
+        done = False
 
-        # --- Forward Pass ---
-        # Run HiveMind
-        results = hive.forward(mock_logs, top_k=3)
+        while not done:
+            optimizer.zero_grad()
 
-        # --- Reward Calculation ---
-        total_loss = torch.tensor(0.0, device=device, requires_grad=True)
+            # --- Agent Decision ---
+            # Forward pass to get Action Vector
+            # We mock the input logs for now, assuming NmapAdapter would run here in real loop
+            mock_logs = [{'src_ip': '127.0.0.1', 'dst_ip': '127.0.0.1', 'port': 80}]
 
-        # Extract results to compute rewards
-        # This part depends on which experts were active.
-        # Sparse MoE makes batch training tricky without masking.
+            results = hive.forward(mock_logs, top_k=3)
 
-        # Adversarial Component
-        if "defense_score" in results:
-            # Score is P(Allowed)
-            score = results["defense_score"]
-            # We want to MAXIMIZE score. Loss = -Score
-            loss_adv = -torch.mean(score)
-            total_loss = total_loss + loss_adv
+            # Extract action for Env
+            action_tensor = torch.zeros(128, device=device)
+            if "optimized_payload" in results:
+            # --- Agent Step ---
+            # Convert Obs to Logs format for HiveMind
+            # HiveMind expects List[Dict]. Env gives vector.
+            # We mock the translation:
+            mock_logs = [{'src_ip': '1.1.1.1', 'dst_ip': '2.2.2.2', 'port': 80, 'proto': 6}] # Using dummy for graph structure
+            # But we inject the Env's observation features into the graph manually?
+            # Or simpler: HiveMind forward handles the graph update.
+            # We assume Env Obs *is* the feature vector for the global node?
 
-        if "optimized_payload" in results:
-            # Maybe auxiliary loss?
-            pass
+            # Run HiveMind
+            results = hive.forward(mock_logs, top_k=3)
 
-        if "topology" in results:
-            # R_info: Entropy reduction?
-            # Mock entropy calculation
-            current_entropy = 0.5 # Placeholder
-            prev_entropy = 0.8
-            r_info = reward_calc.calculate_info_gain_reward(prev_entropy, current_entropy)
-            # Maximize reward -> Minimize -Reward
-            total_loss = total_loss - r_info
+            # Extract Action for Env
+            # Env expects [128] vector.
+            # Aggregate expert outputs?
+            # Let's take 'raw_payload' (PayloadGen) or 'optimized_payload' (Mutator) if available.
+            # Fallback to zero.
 
-        # --- Backward Pass ---
-        total_loss.backward()
+            action_tensor = torch.zeros(128, device=device)
+            if "optimized_payload" in results:
+                # payload might be [Batch, Seq, Dim] or similar. Flatten/Pool.
+                p = results["optimized_payload"]
+                if p.numel() > 0:
+                    flat = p.view(-1)
+                    if flat.size(0) >= 128:
+                        action_tensor = flat[:128]
+                    else:
+                        action_tensor[:flat.size(0)] = flat
 
-        # Hardening: Gradient Clipping
-        torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
+            # --- Environment Interaction ---
+            action_np = action_tensor.detach().cpu().numpy()
+            next_obs, reward, terminated, truncated, _ = env.step(action_np)
+            done = terminated or truncated
+            total_reward += reward
 
-        optimizer.step()
+            # --- Loss Calculation ---
+            # Maximize Reward -> Minimize -Reward
+            # Use Sentinel score as auxiliary objective for stealth
+            loss = -torch.tensor(reward, device=device, requires_grad=True)
+
+            if "defense_score" in results:
+                # Maximize P(Allowed)
+                score = results["defense_score"]
+                loss = loss - 0.1 * torch.log(score + 1e-8).mean()
+
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
+            optimizer.step()
+
+        logger.info(f"Epoch {epoch}: Reward {total_reward}")
+            # --- Environment Step ---
+            action_np = action_tensor.detach().cpu().numpy()
+            next_obs_np, reward, terminated, truncated, info = env.step(action_np)
+            done = terminated or truncated
+
+            total_episode_reward += reward
+
+            # --- Loss Calculation ---
+            # 1. RL Reward Loss (Policy Gradient? Or Differentiable Simulation?)
+            # Since Env is non-differentiable (numpy), we usually need PPO/REINFORCE.
+            # But HiveMind parts (Sentinel loop) are differentiable.
+            # Mixed approach:
+            # - Use Sentinel Score (internal) as differentiable proxy for 'Detectability'.
+            # - Use Env Reward for external feedback.
+
+            loss_total = torch.tensor(0.0, device=device, requires_grad=True)
+
+            # Internal Adv Loss
+            if "defense_score" in results:
+                # Sentinel score (P(Allowed))
+                score = results["defense_score"]
+                loss_adv = -torch.log(score + 1e-8).mean()
+                loss_total = loss_total + loss_adv
+
+            # Load Balancing
+            if "gating_weights" in results:
+                w = results["gating_weights"]
+                entropy = -torch.sum(w * torch.log(w + 1e-8), dim=-1).mean()
+                loss_total = loss_total - 0.05 * entropy
+
+            # Backward
+            loss_total.backward()
+            torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
+            optimizer.step()
+
+            obs_np = next_obs_np
 
         if epoch % 1 == 0:
-            logger.info(f"Epoch {epoch}: Loss {total_loss.item()}")
-
-    logger.info("Training loop complete.")
-
-if __name__ == "__main__":
-    logging.basicConfig()
-    train_hive_mind_adversarial(num_epochs=2)
+            logger.info(f"Epoch {epoch}: Reward {total_episode_reward}")
