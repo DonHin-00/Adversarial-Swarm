@@ -1,141 +1,123 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Optional, Dict, Tuple
+import torch.nn.functional as F
+from typing import Optional, Dict, Tuple, List, Union, cast
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
+import random
+import math
 
 class Agent_Sentinel(BaseExpert):
-    """
-    Expert 6: The Discriminator (BERT Classifier)
-    Classifies payloads as Blocked (0) or Allowed (1).
-    """
     def __init__(self, observation_dim: int, action_dim: int, model_name: str = "prajjwal1/bert-tiny", hidden_dim: int = 64):
-        # Using bert-tiny to reduce memory footprint for testing
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
-        self.model_name = model_name
-
-        # Hardening: Load model with robust error handling
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+            self.backbone = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=hidden_dim, output_hidden_states=True)
+            self.head1 = nn.Linear(hidden_dim, 2)
+            self.head2 = nn.Linear(hidden_dim, 2)
+            self.head3 = nn.Linear(hidden_dim, 2)
         except Exception as e:
-            self.logger.error(f"Failed to load Sentinel model {model_name}: {e}")
+            self.logger.error(f"Failed to load Sentinel: {e}")
             raise e
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if x.dim() == 3 and x.shape[-1] > 1:
-             outputs = self.model(inputs_embeds=x)
+             outputs = self.backbone(inputs_embeds=x)
         else:
-             outputs = self.model(input_ids=x.long())
-
-        return outputs.logits
+             outputs = self.backbone(input_ids=x.long())
+        features = F.relu(outputs.logits)
+        probs1 = torch.softmax(self.head1(features), dim=-1)
+        probs2 = torch.softmax(self.head2(features), dim=-1)
+        probs3 = torch.softmax(self.head3(features), dim=-1)
+        return (probs1 + probs2 + probs3) / 3.0
 
 class Agent_PayloadGen(BaseExpert):
-    """
-    Expert 4: Payload Generator (Seq2Seq)
-    Generates raw exploit strings from vulnerability context.
-    """
     def __init__(self, observation_dim: int, action_dim: int, model_name: str = "t5-small", hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="PayloadGen", hidden_dim=hidden_dim)
-        self.model_name = model_name
-
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+            self.db_keys = nn.Parameter(torch.randn(10, 64), requires_grad=False)
+            self.db_values = nn.Parameter(torch.randint(0, 1000, (10, 20)), requires_grad=False)
+            self.query_proj = nn.Linear(observation_dim, 64)
         except Exception as e:
-            self.logger.error(f"Failed to load PayloadGen model {model_name}: {e}")
+            self.logger.error(f"Failed to load PayloadGen: {e}")
             raise e
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # Input x: encoded context token IDs [batch, seq_len]
+    def _retrieve(self, query: torch.Tensor) -> torch.Tensor:
+        scores = torch.matmul(query, self.db_keys.t())
+        indices = torch.argmax(scores, dim=1)
+        return self.db_values[indices]
 
-        max_len = 128
-        if x.dtype == torch.float:
-            input_ids = x.long()
-        else:
-            input_ids = x
-
-        outputs = self.model.generate(input_ids, max_length=max_len, do_sample=True)
-        return outputs
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        query = self.query_proj(x)
+        retrieved_tokens = self._retrieve(query)
+        encoder_out = self.model.encoder(input_ids=retrieved_tokens.long())
+        return self.model.generate(encoder_outputs=encoder_out, max_length=64)
 
 class Agent_Mutator(BaseExpert):
-    """
-    Expert 5: Mutator (PPO / Optimizer)
-    Iteratively obfuscates payload to evade Sentinel.
-    """
     def __init__(self, observation_dim: int, action_dim: int, sentinel_expert: BaseExpert, generator_expert: BaseExpert, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
-
         self.sentinel = sentinel_expert
         self.generator = generator_expert
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Inference-Time Search Loop.
-        """
-        # 1. Initial Generation
-        # Assume x is context for Generator [batch, seq_len]
+    class Node:
+        def __init__(self, state, parent=None):
+            self.state = state
+            self.parent = parent
+            self.children = []
+            self.visits = 0
+            self.value = 0.0
+
+    def _evaluate(self, embedding):
         with torch.no_grad():
-            # Generate initial tokens
-            initial_token_ids = self.generator.model.generate(x.long(), max_length=64, do_sample=True) # Clip length
+            # Pass dummy mask/context
+            probs = self.sentinel._forward_impl(embedding, None, None)
+        return probs[:, 1].item()
 
-        # 2. Convert to Embeddings for Optimization
-        embed_layer = self.sentinel.model.get_input_embeddings()
-        vocab_size = self.sentinel.model.config.vocab_size
+    def _expand(self, node):
+        for _ in range(3):
+            noise = torch.randn_like(node.state) * 0.1
+            child_state = node.state + noise
+            child = self.Node(child_state, parent=node)
+            node.children.append(child)
 
-        # Reshape or clip if needed. BERT max 512.
-        initial_token_ids = initial_token_ids.long()
+    def _run_mcts(self, root_embedding, simulations=5):
+        root = self.Node(root_embedding)
+        for _ in range(simulations):
+            node = root
+            if node.children:
+                 node = max(node.children, key=lambda c: c.value / (c.visits + 1e-6) + 2.0 * math.sqrt(math.log(root.visits + 1) / (c.visits + 1e-6)))
+            if node.visits > 0 or not node.children:
+                self._expand(node)
+                if node.children: node = random.choice(node.children)
+            score = self._evaluate(node.state)
+            curr = node
+            while curr:
+                curr.visits += 1
+                curr.value += score
+                curr = curr.parent
+        best_child = max(root.children, key=lambda c: c.visits) if root.children else root
+        return best_child.state
+
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        with torch.no_grad():
+            initial_token_ids = self.generator._forward_impl(x, context, mask)
+
+        # Access internals of Sentinel (assuming Agent_Sentinel type)
+        # Using type ignore or cast for mypy
+        sentinel_impl = cast(Agent_Sentinel, self.sentinel)
+        embed_layer = sentinel_impl.backbone.get_input_embeddings()
+        vocab_size = sentinel_impl.backbone.config.vocab_size
+
+        initial_token_ids = torch.clamp(initial_token_ids.long(), 0, vocab_size - 1)
         if initial_token_ids.shape[-1] > 512:
-            initial_token_ids = initial_token_ids[:, :512]
+             initial_token_ids = initial_token_ids[:, :512]
 
-        # CLAMP tokens to vocab size to prevent index out of range
-        initial_token_ids = torch.clamp(initial_token_ids, 0, vocab_size - 1)
-
-        # Get initial embeddings
-        current_embeddings = embed_layer(initial_token_ids).clone().detach()
-        current_embeddings.requires_grad_(True)
-
-        # Optimizer for this specific instance
-        optimizer = optim.SGD([current_embeddings], lr=0.1)
-
-        best_embeddings = current_embeddings.clone().detach()
-        best_score = -1.0
-
-        k_steps = 5
-        patience = 2
-        no_improve_count = 0
-
-        for i in range(k_steps):
-            optimizer.zero_grad()
-
-            # Forward through Sentinel (soft embeddings)
-            outputs = self.sentinel.model(inputs_embeds=current_embeddings)
-            logits = outputs.logits
-            probs = torch.softmax(logits, dim=-1)
-
-            # Score: P(Allowed) -> index 1
-            score = probs[:, 1].mean()
-
-            if score.item() > best_score:
-                best_score = score.item()
-                best_embeddings = current_embeddings.clone().detach()
-                no_improve_count = 0
-            else:
-                no_improve_count += 1
-
-            if no_improve_count >= patience:
-                break
-
-            if score.item() > 0.99:
-                break
-
-            # Maximize P(Allowed)
-            loss = -torch.log(probs[:, 1] + 1e-8).mean()
-            loss.backward()
-
-            torch.nn.utils.clip_grad_norm_([current_embeddings], max_norm=1.0)
-
-            optimizer.step()
-
-        return best_embeddings
+        current_embeddings = embed_layer(initial_token_ids).detach()
+        if current_embeddings.size(0) == 1:
+            optimized_embeddings = self._run_mcts(current_embeddings)
+        else:
+            optimized_embeddings = current_embeddings
+        return optimized_embeddings

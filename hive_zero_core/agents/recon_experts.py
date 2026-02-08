@@ -1,97 +1,81 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch_geometric.nn import GATv2Conv
-from typing import Optional, Dict
+from torch_geometric.nn import HGTConv
+from torch_geometric.data import HeteroData
+from typing import Optional, Dict, Union
 from hive_zero_core.agents.base_expert import BaseExpert
 
 class Agent_Cartographer(BaseExpert):
     """
-    Expert 1: Reconnaissance & Mapping (GAT)
-    Predicts hidden links in the network.
+    Expert 1: Heterogeneous Graph Transformer (HGT)
+    Reasons about complex network topology with distinct node types (IP, Port, Protocol).
     """
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64):
-        # Action dim here is effectively num_nodes (adjacency probability) or embedding dim
-        # Assuming output is updated node embeddings for link prediction
         super().__init__(observation_dim, action_dim, name="Cartographer", hidden_dim=hidden_dim)
 
-        self.conv1 = GATv2Conv(observation_dim, hidden_dim, heads=4, dropout=0.2)
-        # Output dim matches action_dim for compatibility
-        self.conv2 = GATv2Conv(hidden_dim * 4, action_dim, heads=1, concat=False, dropout=0.2)
+        # HGT Metadata
+        self.metadata = (
+            ['ip', 'port', 'protocol'],
+            [('ip', 'flow', 'ip'), ('ip', 'binds', 'port'), ('port', 'uses', 'protocol')]
+        )
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # Context is expected to be the Edge Index from the Graph
-        # x is Node Features [num_nodes, features]
-        if context is None:
-             # Fallback if no graph structure provided
-             return torch.zeros((x.size(0), self.action_dim), device=x.device)
+        # HGT Layers
+        # in_channels needs to match input feature dim (observation_dim)
+        # We assume all node types have same feature dim for simplicity here
+        self.conv1 = HGTConv(observation_dim, hidden_dim, self.metadata, heads=4)
+        self.conv2 = HGTConv(hidden_dim, action_dim, self.metadata, heads=2)
 
-        edge_index = context
+    def _forward_impl(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
 
-        x = F.dropout(x, p=0.2, training=self.training)
-        x = self.conv1(x, edge_index)
-        x = F.elu(x)
-        x = F.dropout(x, p=0.2, training=self.training)
-        x = self.conv2(x, edge_index)
+        if isinstance(x, HeteroData):
+            x_dict = x.x_dict
+            edge_index_dict = x.edge_index_dict
 
-        return x
+            out_dict = self.conv1(x_dict, edge_index_dict)
+            out_dict = {key: torch.relu(val) for key, val in out_dict.items()}
+
+            out_dict = self.conv2(out_dict, edge_index_dict)
+
+            # Return IP embeddings
+            return out_dict.get('ip', torch.zeros(0, self.action_dim))
+        else:
+            # Fallback for tensor input (if legacy test calls it)
+            return torch.zeros(x.size(0), self.action_dim)
 
 class Agent_DeepScope(BaseExpert):
-    """
-    Expert 2: Constraint Masking
-    Applies RoE masks to action logits.
-    """
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="DeepScope", hidden_dim=hidden_dim)
-        # DeepScope includes a learnable layer to transform observations to logits before masking
-        self.adapter = nn.Linear(observation_dim, action_dim)
+        self.priority_net = nn.Linear(observation_dim, action_dim)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        logits = self.adapter(x)
-
-        if mask is not None:
-            # Hard Masking: -1e9 for invalid actions
-            # Ensure mask matches logits shape or broadcasts
-            if mask.shape != logits.shape:
-                # Simple check, real implementation would handle broadcasting carefully
-                # If logits is [batch, action_dim] and mask is [batch, action_dim] -> OK
-                # If mask is [action_dim] -> OK
-                pass
-
-            # (1 - mask) * large_negative + mask * logits
-            # Assuming mask is 1 for valid, 0 for invalid
-            # Ensure 1-mask is broadcastable
-            masked_logits = logits * mask + (1 - mask) * -1e9
-            return masked_logits
-
-        return logits
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        return self.priority_net(x)
 
 class Agent_Chronos(BaseExpert):
     """
-    Expert 3: Time-Series / Heartbeat
-    Predicts optimal injection timestamp.
+    Expert 3: Fourier-Enhanced Time Series
+    Uses FFT to extract periodicity features from packet arrival times.
     """
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Chronos", hidden_dim=hidden_dim)
+        self.encoder = nn.Linear(observation_dim + 10, hidden_dim)
+        self.head = nn.Linear(hidden_dim, action_dim)
 
-        # Input: Sequence of inter-arrival times [batch, seq_len, 1]
-        self.lstm = nn.LSTM(input_size=1, hidden_size=hidden_dim, num_layers=2, batch_first=True)
-        self.head = nn.Linear(hidden_dim, action_dim) # Output: timestamp scalar or distribution parameters
-
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # Hardening: Check input shape. Expecting [batch, seq_len] or [batch, seq_len, 1]
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        # x: [batch, seq_len]
         if x.dim() == 2:
-            x = x.unsqueeze(-1) # [batch, seq_len] -> [batch, seq_len, 1]
+             # Add feature dim if missing?
+             # Or assume input is [batch, seq_len] time series values
+             pass
 
-        # Z-score normalization for outlier hardening (simplified per-batch)
-        mean = x.mean(dim=1, keepdim=True)
-        std = x.std(dim=1, keepdim=True) + 1e-6
-        x_norm = (x - mean) / std
+        # FFT
+        fft = torch.fft.rfft(x, dim=1)
+        magnitudes = torch.abs(fft)
+        feats = magnitudes[:, 1:11]
 
-        out, (hn, cn) = self.lstm(x_norm)
+        if feats.size(1) < 10:
+            feats = torch.cat([feats, torch.zeros(x.size(0), 10 - feats.size(1), device=x.device)], dim=1)
 
-        # Take last hidden state
-        last_hidden = out[:, -1, :]
-        prediction = self.head(last_hidden)
+        inp = torch.cat([x[:, -1:], feats], dim=1)
 
-        return prediction
+        out = self.encoder(inp)
+        return self.head(torch.relu(out))

@@ -1,135 +1,120 @@
 import torch
 import torch.nn as nn
-import logging
-from torch_geometric.data import Data
-from typing import List, Dict, Optional, Tuple, Set
+from torch_geometric.data import HeteroData
+from typing import List, Dict, Optional, Tuple
 import ipaddress
+import hashlib
 
-# Configure logger
-logger = logging.getLogger(__name__)
-
-class LogEncoder(nn.Module):
-    def __init__(self, node_feature_dim: int = 64, edge_feature_dim: int = 32):
+class HeteroLogEncoder(nn.Module):
+    """
+    Advanced Log Encoder producing Heterogeneous Graphs.
+    """
+    def __init__(self, node_embed_dim: int = 64):
         super().__init__()
-        self.node_feature_dim = node_feature_dim
-        self.edge_feature_dim = edge_feature_dim
+        self.node_embed_dim = node_embed_dim
 
-        # Encoders for node features
-        # IP as 32 bits -> embedded to node_feature_dim
-        self.ip_projection = nn.Linear(32, node_feature_dim)
+        self.ip_encoder = nn.Linear(32, node_embed_dim)
+        self.port_encoder = nn.Embedding(65536, node_embed_dim)
+        self.proto_encoder = nn.Embedding(256, node_embed_dim)
 
-        # Encoders for edge features
-        self.port_embedding = nn.Embedding(65536, edge_feature_dim) # 0-65535 ports
-        self.proto_embedding = nn.Embedding(256, edge_feature_dim) # 0-255 protocols
+        self.ip_map: Dict[str, int] = {}
+        self.port_map: Dict[int, int] = {}
+        self.proto_map: Dict[int, int] = {}
 
-        # Mappings
-        self.ip_to_idx: Dict[str, int] = {}
-        self.idx_to_ip: Dict[int, str] = {}
-        self.next_idx = 0
+    def _get_idx(self, key, mapping):
+        if key not in mapping:
+            mapping[key] = len(mapping)
+        return mapping[key]
 
-    def _ip_to_bits(self, ip_str: str) -> torch.Tensor:
+    def _ip_to_tensor(self, ip_str: str) -> torch.Tensor:
         try:
             ip_int = int(ipaddress.IPv4Address(ip_str))
-            # Convert to 32 bits binary representation
-            # format(ip_int, '032b') creates a string like '11000000101010000000000100000001'
             bits = [float(x) for x in format(ip_int, '032b')]
             return torch.tensor(bits, dtype=torch.float32)
-        except (ipaddress.AddressValueError, ValueError):
-            logger.warning(f"Invalid IP address encountered: {ip_str}. Using 0.0.0.0")
+        except:
             return torch.zeros(32, dtype=torch.float32)
 
-    def _get_node_idx(self, ip: str) -> int:
-        if ip not in self.ip_to_idx:
-            idx = self.next_idx
-            self.ip_to_idx[ip] = idx
-            self.idx_to_ip[idx] = ip
-            self.next_idx += 1
-        return self.ip_to_idx[ip]
+    def update(self, logs: List[Dict]) -> HeteroData:
+        data = HeteroData()
 
-    def update(self, logs: List[Dict]) -> Data:
-        """
-        Converts a list of raw log dictionaries into a PyG Data object.
+        ip_src_indices: List[int] = []
+        ip_dst_indices: List[int] = []
 
-        Args:
-            logs: List of dicts with keys 'src_ip', 'dst_ip', 'port', 'proto'
+        ip_to_port_src: List[int] = []
+        ip_to_port_dst: List[int] = []
 
-        Returns:
-            torch_geometric.data.Data object with:
-            - x: Node features [num_nodes, node_feature_dim]
-            - edge_index: Graph connectivity [2, num_edges]
-            - edge_attr: Edge features [num_edges, edge_feature_dim * 2]
-        """
-        if not logs:
-            # Return empty graph with correct feature dimensions
-            # Even with 0 nodes, feature dim must match expectation
-            return Data(
-                x=torch.zeros((0, self.node_feature_dim)),
-                edge_index=torch.empty((2, 0), dtype=torch.long),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2))
-            )
+        port_to_proto_src: List[int] = []
+        port_to_proto_dst: List[int] = []
 
-        src_indices = []
-        dst_indices = []
-        edge_attr_inputs = [] # List of tuples (port, proto)
+        local_ip_map: Dict[str, int] = {}
+        local_port_map: Dict[int, int] = {}
+        local_proto_map: Dict[int, int] = {}
 
-        # Process logs to build edges and register nodes
         for log in logs:
-            src = log.get('src_ip', '0.0.0.0')
-            dst = log.get('dst_ip', '0.0.0.0')
-            port = log.get('port', 0)
-            proto = log.get('proto', 6) # TCP default
+            src_ip = log.get('src_ip', '0.0.0.0')
+            dst_ip = log.get('dst_ip', '0.0.0.0')
+            dport = int(log.get('port', 0))
+            proto = int(log.get('proto', 6))
 
-            # Input Validation Hardening
-            try:
-                port = int(port)
-                if not (0 <= port <= 65535):
-                    port = 0
-            except (ValueError, TypeError):
-                port = 0
+            s_idx = self._get_idx(src_ip, local_ip_map)
+            d_idx = self._get_idx(dst_ip, local_ip_map)
+            p_idx = self._get_idx(dport, local_port_map)
+            pr_idx = self._get_idx(proto, local_proto_map)
 
-            try:
-                proto = int(proto)
-                if not (0 <= proto <= 255):
-                    proto = 6
-            except (ValueError, TypeError):
-                proto = 6
+            ip_src_indices.append(s_idx)
+            ip_dst_indices.append(d_idx)
 
-            src_idx = self._get_node_idx(src)
-            dst_idx = self._get_node_idx(dst)
+            ip_to_port_src.append(d_idx)
+            ip_to_port_dst.append(p_idx)
 
-            src_indices.append(src_idx)
-            dst_indices.append(dst_idx)
+            port_to_proto_src.append(p_idx)
+            port_to_proto_dst.append(pr_idx)
 
-            edge_attr_inputs.append((port, proto))
+        ip_features = []
+        sorted_ips = sorted(local_ip_map.items(), key=lambda x: x[1])
+        for ip, _ in sorted_ips:
+            ip_features.append(self._ip_to_tensor(ip))
 
-        # Create Node Features Tensor
-        # Iterate over all registered nodes in order of index 0..N-1
-        num_nodes = self.next_idx
-        x_raw_list = []
-        for i in range(num_nodes):
-            ip_str = self.idx_to_ip[i]
-            x_raw_list.append(self._ip_to_bits(ip_str))
+        # Ensure device consistency by inferring from model parameters
+        device = next(self.parameters()).device
 
-        if not x_raw_list:
-             return Data(
-                x=torch.zeros((0, self.node_feature_dim)),
-                edge_index=torch.empty((2, 0), dtype=torch.long),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2))
-            )
+        if ip_features:
+            x_ip_raw = torch.stack(ip_features).to(device)
+            x_ip = self.ip_encoder(x_ip_raw)
+        else:
+            x_ip = torch.zeros((0, self.node_embed_dim), device=device)
 
-        x_tensor = torch.stack(x_raw_list) # [num_nodes, 32]
-        x_embedded = self.ip_projection(x_tensor) # [num_nodes, node_feature_dim]
+        sorted_ports = sorted(local_port_map.items(), key=lambda x: x[1])
+        port_indices = torch.tensor([p for p, _ in sorted_ports], dtype=torch.long, device=device)
+        if len(port_indices) > 0:
+            x_port = self.port_encoder(port_indices)
+        else:
+            x_port = torch.zeros((0, self.node_embed_dim), device=device)
 
-        # Create Edge Index Tensor
-        edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long)
+        sorted_protos = sorted(local_proto_map.items(), key=lambda x: x[1])
+        proto_indices = torch.tensor([p for p, _ in sorted_protos], dtype=torch.long, device=device)
+        if len(proto_indices) > 0:
+            x_proto = self.proto_encoder(proto_indices)
+        else:
+            x_proto = torch.zeros((0, self.node_embed_dim), device=device)
 
-        # Create Edge Attributes Tensor
-        ports = torch.tensor([attr[0] for attr in edge_attr_inputs], dtype=torch.long)
-        protos = torch.tensor([attr[1] for attr in edge_attr_inputs], dtype=torch.long)
+        data['ip'].x = x_ip
+        data['port'].x = x_port
+        data['protocol'].x = x_proto
 
-        port_embeds = self.port_embedding(ports) # [num_edges, edge_feature_dim]
-        proto_embeds = self.proto_embedding(protos) # [num_edges, edge_feature_dim]
+        if ip_src_indices:
+            data['ip', 'flow', 'ip'].edge_index = torch.tensor([ip_src_indices, ip_dst_indices], dtype=torch.long, device=device)
+        else:
+            data['ip', 'flow', 'ip'].edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
 
-        edge_attr = torch.cat([port_embeds, proto_embeds], dim=1) # [num_edges, edge_feature_dim * 2]
+        if ip_to_port_src:
+            data['ip', 'binds', 'port'].edge_index = torch.tensor([ip_to_port_src, ip_to_port_dst], dtype=torch.long, device=device)
+        else:
+            data['ip', 'binds', 'port'].edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
 
-        return Data(x=x_embedded, edge_index=edge_index, edge_attr=edge_attr)
+        if port_to_proto_src:
+            data['port', 'uses', 'protocol'].edge_index = torch.tensor([port_to_proto_src, port_to_proto_dst], dtype=torch.long, device=device)
+        else:
+            data['port', 'uses', 'protocol'].edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
+
+        return data
