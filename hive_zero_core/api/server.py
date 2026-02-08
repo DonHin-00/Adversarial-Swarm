@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
@@ -33,6 +34,15 @@ app = FastAPI(
     description="Command & Control Interface for the HIVE-ZERO Adversarial Swarm.",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Enable CORS for cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 hive = HiveMind(observation_dim=64)
@@ -75,6 +85,32 @@ async def health_check():
         "paused": is_paused
     }
 
+@app.get("/status", tags=["System"], summary="Get Status")
+async def status_check():
+    """Returns status specifically for monitoring tools."""
+    return {
+        "paused": is_paused,
+        "connections": len(active_websockets)
+    }
+
+@app.post("/control/pause", tags=["Control"], summary="Pause Operations")
+async def pause_system():
+    """Pauses all swarm execution."""
+    global is_paused
+    is_paused = True
+    logger.warning("System PAUSED by operator.")
+    await broadcast_status({"type": "alert", "message": "System PAUSED by operator"})
+    return {"status": "paused"}
+
+@app.post("/control/resume", tags=["Control"], summary="Resume Operations")
+async def resume_system():
+    """Resumes swarm execution."""
+    global is_paused
+    is_paused = False
+    logger.info("System RESUMED by operator.")
+    await broadcast_status({"type": "info", "message": "System RESUMED by operator"})
+    return {"status": "running"}
+
 @app.get("/dashboard", tags=["UI"], summary="Web Dashboard", response_class=HTMLResponse)
 async def dashboard():
     """Serves the HIVE-ZERO Web Dashboard."""
@@ -105,16 +141,21 @@ def get_graph_viz():
     """Returns the current knowledge graph for Cytoscape.js visualization."""
     if hasattr(hive, 'last_data'):
         return hive.log_encoder.to_cytoscape_json(hive.last_data)
-    return {"nodes": [], "edges": []}
+    # Return dummy data for viz testing if no real data
+    return {
+        "nodes": [
+            {"data": {"id": "core", "label": "HiveMind Core", "type": "core"}},
+            {"data": {"id": "net", "label": "Internet", "type": "network"}}
+        ],
+        "edges": [
+            {"data": {"source": "core", "target": "net", "label": "scans"}}
+        ]
+    }
 
 @app.post("/execute", tags=["Control"], summary="Execute Swarm Strategy")
 async def execute_swarm(request: CommandRequest):
     """
     Analyzes logs and executes the optimal adversarial strategy.
-
-    - **logs**: List of network events
-    - **top_k**: Number of experts to involve
-    - **dry_run**: Simulation mode
     """
     global is_paused
     if is_paused:

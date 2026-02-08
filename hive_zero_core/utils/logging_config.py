@@ -1,6 +1,7 @@
 import logging
 import sys
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 class ColoredFormatter(logging.Formatter):
     """
@@ -48,10 +49,14 @@ def setup_logger(name: str, log_level: int = logging.INFO) -> logging.Logger:
         ch.setFormatter(ColoredFormatter())
         logger.addHandler(ch)
 
-        # Create file handler with plain output
+        # Create rotating file handler (10MB max, 5 backups)
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
-        fh = logging.FileHandler(log_dir / "hive_zero.log")
+        fh = RotatingFileHandler(
+            log_dir / "hive_zero.log",
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5
+        )
         fh.setLevel(log_level)
         fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
         logger.addHandler(fh)
