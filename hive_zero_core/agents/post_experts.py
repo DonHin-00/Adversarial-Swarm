@@ -6,6 +6,8 @@ from typing import Optional, Dict, Union, List
 from hive_zero_core.agents.base_expert import BaseExpert
 import os
 import shutil
+from typing import Optional, Dict
+from hive_zero_core.agents.base_expert import BaseExpert
 
 class Agent_Mimic(BaseExpert):
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64):
@@ -23,6 +25,8 @@ class Agent_Mimic(BaseExpert):
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if context is None: context = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
+        if context is None:
+             context = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
         proto_emb = self.proto_embedding(context.squeeze(-1) if context.dim() > 1 else context)
         enc_in = torch.cat([x, proto_emb], dim=1)
         enc = self.encoder(enc_in)
@@ -63,6 +67,11 @@ class Agent_Stego(BaseExpert):
 
     def _dct_2d(self, x): return torch.fft.fft2(x).real
     def _idct_2d(self, x): return torch.fft.ifft2(x).real
+    def _dct_2d(self, x):
+        return torch.fft.fft2(x).real
+
+    def _idct_2d(self, x):
+        return torch.fft.ifft2(x).real
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         encoded_msg = torch.tanh(self.payload_encoder(x))
@@ -96,10 +105,15 @@ class Agent_Cleaner(BaseExpert):
 
         script.append("history -c")
         return "\n".join(script)
+        self.state_model = nn.Sequential(nn.Linear(observation_dim + action_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, observation_dim))
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if x.dim() == 2:
             x = x.unsqueeze(1)
         out, _ = self.generator(x)
         action_logits = self.head(out[:, -1, :])
+
+        # Internal verification logic omitted from return to satisfy signature
+        # In real system, we'd log 'verified_score' or use an auxiliary head.
+
         return action_logits

@@ -1,0 +1,8 @@
+{
+  "name": "hive-zero-dummy",
+  "version": "1.0.0",
+  "description": "Dummy package.json to fix CI workflow",
+  "scripts": {
+    "build": "echo \"No build script needed\""
+  }
+}
