@@ -7,6 +7,8 @@ from hive_zero_core.memory.graph_store import LogEncoder
 from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
+from hive_zero_core.agents.defense_experts import Agent_Tarpit
+from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_Wraith
 
 class GatingNetwork(nn.Module):
     def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64):
@@ -33,27 +35,36 @@ class HiveMind(nn.Module):
         # 1. Shared Latent Space / Data Layer
         self.log_encoder = LogEncoder(node_feature_dim=observation_dim)
 
-        # 2. The 10 Experts
+        # 2. The 14 Experts (Cluster A, B, C + Active Defense + Kill Chain)
         # Define dimensions carefully. For prototype, we use unified dims or specific ones mapped by adapters.
         # We'll use a standard 'action_dim' for most, or expert-specific return types handled by aggregation.
 
-        # Cluster A
+        # Cluster A: Recon
         self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)
         self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10) # 10 discrete actions?
         self.expert_chronos = Agent_Chronos(1, action_dim=1) # Time input
 
-        # Cluster B
+        # Cluster B: Attack
         self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
         self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128) # Seq len
         self.expert_mutator = Agent_Mutator(observation_dim, action_dim=128,
                                            sentinel_expert=self.expert_sentinel,
                                            generator_expert=self.expert_payloadgen)
 
-        # Cluster C
+        # Cluster C: Post-Exploit
         self.expert_mimic = Agent_Mimic(observation_dim, action_dim=2)
         self.expert_ghost = Agent_Ghost(observation_dim, action_dim=5)
         self.expert_stego = Agent_Stego(observation_dim, action_dim=64)
         self.expert_cleaner = Agent_Cleaner(observation_dim, action_dim=10)
+
+        # Cluster D: Active Defense (The Hunter)
+        # Action dim 64 matches observation dim to simulate "port" coverage or full-spectrum noise
+        self.expert_tarpit = Agent_Tarpit(observation_dim, action_dim=observation_dim)
+
+        # Cluster E: Kill Chain (The Synergizers)
+        self.expert_feedback = Agent_FeedbackLoop(observation_dim, action_dim=observation_dim)
+        self.expert_flashbang = Agent_Flashbang(observation_dim, action_dim=observation_dim)
+        self.expert_wraith = Agent_Wraith(observation_dim, action_dim=observation_dim)
 
         # Order matters for indexing in GatingNetwork outputs
         self.experts = nn.ModuleList([
@@ -66,7 +77,11 @@ class HiveMind(nn.Module):
             self.expert_mimic,        # 6
             self.expert_ghost,        # 7
             self.expert_stego,        # 8
-            self.expert_cleaner       # 9
+            self.expert_cleaner,      # 9
+            self.expert_tarpit,       # 10
+            self.expert_feedback,     # 11
+            self.expert_flashbang,    # 12
+            self.expert_wraith        # 13
         ])
 
         # 3. Gating Mechanism
@@ -99,6 +114,15 @@ class HiveMind(nn.Module):
         # Get indices
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
+
+        # SYNERGY LOGIC:
+        # If Tarpit (10) is selected or highly weighted, Force-Enable Kill Chain (11, 12, 13)
+        # Quad-Strike: Trap -> Reflect -> Blind -> Infect
+        tarpit_idx = 10
+        if tarpit_idx in active_indices:
+            if 11 not in active_indices: active_indices.append(11) # Feedback
+            if 12 not in active_indices: active_indices.append(12) # Flashbang
+            if 13 not in active_indices: active_indices.append(13) # Wraith
 
         results = {}
 
@@ -167,6 +191,26 @@ class HiveMind(nn.Module):
                 elif expert.name == "Cleaner":
                     out = expert(global_state)
                     results["cleanup"] = out
+
+                elif expert.name == "Tarpit":
+                    # The Hunter needs maximum view (global_state) to deploy traps
+                    out = expert(global_state)
+                    results["active_defense"] = out
+
+                elif expert.name == "FeedbackLoop":
+                    # Reflects attack
+                    out = expert(global_state)
+                    results["counter_strike"] = out
+
+                elif expert.name == "Flashbang":
+                    # Injects sensory overload
+                    out = expert(global_state)
+                    results["overload"] = out
+
+                elif expert.name == "Wraith":
+                    # Persists via polymorphic shellcode
+                    out = expert(global_state)
+                    results["persistence"] = out
 
             except Exception as e:
                 self.logger.error(f"Execution failed for {expert.name}: {e}")
