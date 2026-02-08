@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
+from typing import Optional, Dict, Union, List
+from hive_zero_core.agents.base_expert import BaseExpert
+import os
+import shutil
 from typing import Optional, Dict
 from hive_zero_core.agents.base_expert import BaseExpert
 
@@ -20,6 +24,7 @@ class Agent_Mimic(BaseExpert):
         return mu + eps * std
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        if context is None: context = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
         if context is None:
              context = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
         proto_emb = self.proto_embedding(context.squeeze(-1) if context.dim() > 1 else context)
@@ -36,6 +41,19 @@ class Agent_Ghost(BaseExpert):
         self.risk_head = nn.Linear(hidden_dim, 1)
         self.score_head = nn.Linear(hidden_dim, 1)
 
+    def analyze_path(self, path: str) -> Dict[str, float]:
+        score = 0.0
+        try:
+            stats = os.stat(path)
+            mode = stats.st_mode
+            if mode & 0o002: score += 0.8
+            if mode & 0o020: score += 0.4
+            if "tmp" in path: score += 0.5
+            if "log" in path: score += 0.3
+        except Exception:
+            score = -1.0
+        return {"suitability": score}
+
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if x.dim() == 2:
             feat = self.feature_extractor(x)
@@ -47,6 +65,8 @@ class Agent_Stego(BaseExpert):
         super().__init__(observation_dim, action_dim, name="Stego", hidden_dim=hidden_dim)
         self.payload_encoder = nn.Linear(observation_dim, 64)
 
+    def _dct_2d(self, x): return torch.fft.fft2(x).real
+    def _idct_2d(self, x): return torch.fft.ifft2(x).real
     def _dct_2d(self, x):
         return torch.fft.fft2(x).real
 
@@ -70,6 +90,21 @@ class Agent_Cleaner(BaseExpert):
         super().__init__(observation_dim, action_dim, name="Cleaner", hidden_dim=hidden_dim)
         self.generator = nn.LSTM(observation_dim, hidden_dim, batch_first=True)
         self.head = nn.Linear(hidden_dim, action_dim)
+
+    def generate_cleanup_script(self, action_history: List[str]) -> str:
+        script = []
+        for action in reversed(action_history):
+            if "touch" in action:
+                filename = action.split()[-1]
+                script.append(f"rm {filename}")
+            elif "mkdir" in action:
+                dirname = action.split()[-1]
+                script.append(f"rmdir {dirname}")
+            elif "curl" in action or "wget" in action:
+                script.append("# Check for downloaded artifacts")
+
+        script.append("history -c")
+        return "\n".join(script)
         self.state_model = nn.Sequential(nn.Linear(observation_dim + action_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, observation_dim))
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
