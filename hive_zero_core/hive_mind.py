@@ -8,7 +8,7 @@ from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepSc
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
 from hive_zero_core.agents.defense_experts import Agent_Tarpit
-from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_Wraith
+from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
 
 class GatingNetwork(nn.Module):
     def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64):
@@ -64,7 +64,7 @@ class HiveMind(nn.Module):
         # Cluster E: Kill Chain (The Synergizers)
         self.expert_feedback = Agent_FeedbackLoop(observation_dim, action_dim=observation_dim)
         self.expert_flashbang = Agent_Flashbang(observation_dim, action_dim=observation_dim)
-        self.expert_wraith = Agent_Wraith(observation_dim, action_dim=observation_dim)
+        self.expert_glasshouse = Agent_GlassHouse(observation_dim, action_dim=observation_dim)
 
         # Order matters for indexing in GatingNetwork outputs
         self.experts = nn.ModuleList([
@@ -81,7 +81,7 @@ class HiveMind(nn.Module):
             self.expert_tarpit,       # 10
             self.expert_feedback,     # 11
             self.expert_flashbang,    # 12
-            self.expert_wraith        # 13
+            self.expert_glasshouse    # 13
         ])
 
         # 3. Gating Mechanism
@@ -117,12 +117,12 @@ class HiveMind(nn.Module):
 
         # SYNERGY LOGIC:
         # If Tarpit (10) is selected or highly weighted, Force-Enable Kill Chain (11, 12, 13)
-        # Quad-Strike: Trap -> Reflect -> Blind -> Infect
+        # Quad-Strike: Trap -> Reflect -> Blind -> Expose
         tarpit_idx = 10
         if tarpit_idx in active_indices:
             if 11 not in active_indices: active_indices.append(11) # Feedback
             if 12 not in active_indices: active_indices.append(12) # Flashbang
-            if 13 not in active_indices: active_indices.append(13) # Wraith
+            if 13 not in active_indices: active_indices.append(13) # GlassHouse
 
         results = {}
 
@@ -207,10 +207,10 @@ class HiveMind(nn.Module):
                     out = expert(global_state)
                     results["overload"] = out
 
-                elif expert.name == "Wraith":
-                    # Persists via polymorphic shellcode
+                elif expert.name == "GlassHouse":
+                    # Total Exposure
                     out = expert(global_state)
-                    results["persistence"] = out
+                    results["total_exposure"] = out
 
             except Exception as e:
                 self.logger.error(f"Execution failed for {expert.name}: {e}")

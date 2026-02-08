@@ -12,33 +12,16 @@ class Agent_FeedbackLoop(BaseExpert):
     """
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128):
         super().__init__(observation_dim, action_dim, name="FeedbackLoop", hidden_dim=hidden_dim)
-
-        # Signal Amplification Network
-        # Non-linear amplification to ensure the reflected signal is stronger than the input
         self.amplifier = nn.Sequential(
             nn.Linear(observation_dim, hidden_dim),
-            nn.Tanh(), # Preserve sign but saturate
+            nn.Tanh(),
             nn.Linear(hidden_dim, action_dim)
         )
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Reflects the attack vector with amplification.
-        """
-        # 1. Capture the signal (x)
-        # 2. Amplify
         amplified = self.amplifier(x)
-
-        # 3. Add Kinetic Energy (Cubic expansion for high-value spikes)
-        # If input was high, output becomes massive.
-        # x + x^3 behavior
         kinetic = amplified + torch.pow(amplified, 3)
-
-        # 4. Invert Phase (Counter-Strike)
-        # We don't just echo; we invert the signal to cancel/disrupt the attacker's wave
-        reflection = kinetic * -10.0
-
-        return reflection
+        return kinetic * -10.0
 
 class Agent_Flashbang(BaseExpert):
     """
@@ -47,75 +30,53 @@ class Agent_Flashbang(BaseExpert):
     """
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128):
         super().__init__(observation_dim, action_dim, name="Flashbang", hidden_dim=hidden_dim)
-
-        # Burst Generator (Dilated Convolution simulation via Linear expansion)
-        # We want to take a small seed and explode it into a massive tensor
         self.expander = nn.Linear(observation_dim, hidden_dim * 4)
         self.formatter = nn.Linear(hidden_dim * 4, action_dim)
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Generates sensory overload.
-        """
-        batch_size = x.size(0)
-
-        # 1. Expand: Explosion phase
         expanded = F.relu(self.expander(x))
-
-        # 2. Dazzle: Add random high-variance noise (The "Flash")
         flash = torch.randn_like(expanded) * 100.0
-
-        # 3. Format: Compress back to output dim but keep the energy
-        # The result is a dense, high-magnitude tensor that looks like valid but extreme signals
         out = self.formatter(expanded + flash)
+        return out + 1.0
 
-        # Hardening: Ensure it's never zero (always blinding)
-        out = out + 1.0
-
-        return out
-
-class Agent_Wraith(BaseExpert):
+class Agent_GlassHouse(BaseExpert):
     """
-    Expert 14: The Haunting.
-    Persistence / Hack Back.
-    Embeds self-replicating polymorphic shellcode patterns into the noise.
+    Expert 14: The Exposer.
+    'Total Exposure': Strips attacker defenses and opens all surfaces to the internet.
     """
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128):
-        super().__init__(observation_dim, action_dim, name="Wraith", hidden_dim=hidden_dim)
+        super().__init__(observation_dim, action_dim, name="GlassHouse", hidden_dim=hidden_dim)
 
-        # Polymorphic Engine (GAN-like)
-        # Generates "Payload" tensors that look different every time but contain the "Beacon" signature
-        self.encoder = nn.Sequential(
-            nn.Linear(observation_dim, hidden_dim),
-            nn.LeakyReLU(0.2),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.Sigmoid() # Normalize to [0,1] bits
-        )
+        # 1. Firewall Breaker Network
+        # Outputs signals to drop rules/flush tables
+        self.breaker = nn.Linear(observation_dim, hidden_dim)
 
-        self.decoder = nn.Linear(hidden_dim, action_dim)
+        # 2. Service Binder (The Opener)
+        # Maps internal services to 0.0.0.0
+        self.opener = nn.Linear(hidden_dim, action_dim)
+
+        # 3. Beacon Broadcaster
+        # Amplifies the signal to be visible to scanners
+        self.beacon = nn.Linear(hidden_dim, action_dim)
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Generates the persistence payload.
+        Generates the 'Open All Surfaces' tensor.
         """
-        batch_size = x.size(0)
+        # Phase 1: Break Walls
+        # Invert the safety gradients - assume 'x' contains security config
+        broken = F.leaky_relu(self.breaker(x), negative_slope=0.2)
 
-        # 1. Generate the "Beacon" seed from current state
-        # (Adapts to environment so it looks like local data)
-        seed = self.encoder(x)
+        # Phase 2: Open Doors (0.0.0.0 binding)
+        # We want high positive values to represent "OPEN" state on ports
+        open_ports = torch.abs(self.opener(broken)) * 100.0
 
-        # 2. Add Polymorphic Salt (Random Noise)
-        # Ensures signature changes every execution
-        salt = torch.rand_like(seed)
-        payload_code = seed * salt
+        # Phase 3: Shout (Beacon)
+        # Add high-frequency noise to attract attention
+        shout = self.beacon(broken) * torch.randn_like(open_ports)
 
-        # 3. Decode into Action Space
-        # Represents the obfuscated shellcode byte-stream
-        beacon = self.decoder(payload_code)
+        # Combine: Maximum Exposure
+        # The result is a tensor that screams "I AM OPEN"
+        total_exposure = open_ports + shout
 
-        # 4. Stealth Coating
-        # Add a layer of "normalcy" (small values) to hide the sharp "exploit" spikes
-        # The exploit is hidden in the variance, not the mean
-        stealth_beacon = beacon * 5.0 # Boost signal strength for transmission
-
-        return stealth_beacon
+        return total_exposure
