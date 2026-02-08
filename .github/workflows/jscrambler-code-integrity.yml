@@ -1,0 +1,54 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+# This is a basic workflow to help you get started with Using Jscrambler Code Integrity Action.
+# It automates the protection of your JavaScript Applications, so you can run it whenever a new version of your application is built.
+# A Jscrambler account is required to use this Workflow.
+#
+# More info can be found here : https://docs.jscrambler.com/latest/code-integrity/documentation/github-ci-integration
+
+name: Jscrambler Code Integrity
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: npm ci
+      - run: npm run build
+      - name: Run CI (Lint, Security, Test)
+        run: npm run ci
+      - name: Jscrambler Code Integrity
+        id: jscrambler
+        # the complete list of inputs can be found here: https://github.com/marketplace/actions/jscrambler#inputs
+        uses: jscrambler/code-integrity-actions/protect@ff3e337e03f8cc2af284686ece86aa40f6fc343f
+        with:
+          application-id: ${{ secrets.JSCRAMBLER_APPLICATION_ID }}  # This value should be created within your Jscrambler account
+          secret-key: ${{ secrets.JSCRAMBLER_SECRET_KEY }}          # This value can be found in your Jscrambler account
+          access-key: ${{ secrets.JSCRAMBLER_ACCESS_KEY }}          # This value can be found in your Jscrambler account
+          jscrambler-config-path: jscrambler.json                   # Download from your Jscrambler account
+          files-src: |                                              # List of Files to be protected
+            dist/**/*
+          files-dest: .

@@ -1,5 +1,6 @@
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
+
 
 class CompositeReward:
     def __init__(self, w_adv: float = 1.0, w_info: float = 0.5, w_stealth: float = 0.8):
@@ -26,7 +27,7 @@ class CompositeReward:
         Gain = Prev - Current.
         """
         gain = prev_entropy - current_entropy
-        return max(0.0, gain) # Reward positive gain only
+        return max(0.0, gain)  # Reward positive gain only
 
     def calculate_stealth_reward(self, traffic_dist: torch.Tensor, baseline_dist: torch.Tensor) -> torch.Tensor:
         """
@@ -44,8 +45,8 @@ class CompositeReward:
 
         # KL Divergence (assuming log_probs input for P? or probs?)
         # Let's assume input is probs.
-        kl = F.kl_div(traffic_dist.log(), baseline_dist, reduction='batchmean')
-        return -kl # Maximize negative KL (minimize divergence)
+        kl = F.kl_div(traffic_dist.log(), baseline_dist, reduction="batchmean")
+        return -kl  # Maximize negative KL (minimize divergence)
 
     def compute(self, adv_score, info_gain, traffic_dist, baseline_dist) -> torch.Tensor:
         r_adv = self.calculate_adversarial_reward(adv_score)
