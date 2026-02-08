@@ -12,16 +12,16 @@ HIVE-ZERO utilizes a **Sparse Mixture-of-Experts (MoE)** architecture where a ce
 
 ### 🛡️ Specialized Experts (The 10 Specialists)
 
-1.  **Agent_Cartographer (Recon):** Temporal Graph Attention Network (T-GAT). Uses `GATv2Conv` and `GRU` to reason about evolving network topologies.
-2.  **Agent_DeepScope (Recon):** Prioritization engine for identifying high-value targets within the network graph.
-3.  **Agent_Chronos (Recon):** Transformer-based Forecaster. Uses causal masking to predict packet inter-arrival times and optimize timing.
-4.  **Agent_PayloadGen (Attack):** RAG-enhanced Generator. Retrieves exploit templates from a VectorDB to condition T5-based payload generation.
-5.  **Agent_Mutator (Attack):** Hybrid Optimizer. Implements Inference-Time Search (ITS) using gradient descent and discrete noise to evade detection.
-6.  **Agent_Sentinel (Defense):** Stateful Ensemble Discriminator. Uses a history-aware GRU and multiple heads to model IDS alert thresholds.
-7.  **Agent_Mimic (Post):** Conditional VAE-GAN. Generates realistic network traffic shapes conditioned on protocol metadata.
-8.  **Agent_Ghost (Post):** Kernel Metadata Analyzer. Identifies optimal hiding spots by analyzing simulated syscall and inode structures.
-9.  **Agent_Stego (Post):** Frequency-Domain Steganography. Embeds payloads into DCT coefficients using 2D Fourier transforms.
-10. **Agent_Cleaner (Post):** Formal Logic Verifier. Generates cleanup scripts and verifies the restoration of the environment state.
+1.  **CartographerAgent (Recon):** Temporal Graph Attention Network (T-GAT). Uses `GATv2Conv` and `GRU` to reason about evolving network topologies.
+2.  **DeepScopeAgent (Recon):** Prioritization engine for identifying high-value targets within the network graph.
+3.  **ChronosAgent (Recon):** Transformer-based Forecaster. Uses causal masking to predict packet inter-arrival times and optimize timing.
+4.  **PayloadGenAgent (Attack):** RAG-enhanced Generator. Retrieves exploit templates from a VectorDB to condition T5-based payload generation.
+5.  **MutatorAgent (Attack):** Hybrid Optimizer. Implements Inference-Time Search (ITS) using gradient descent and discrete noise to evade detection.
+6.  **SentinelAgent (Defense):** Stateful Ensemble Discriminator. Uses a history-aware GRU and multiple heads to model IDS alert thresholds.
+7.  **MimicAgent (Post):** Conditional VAE-GAN. Generates realistic network traffic shapes conditioned on protocol metadata.
+8.  **GhostAgent (Post):** Kernel Metadata Analyzer. Identifies optimal hiding spots by analyzing simulated syscall and inode structures.
+9.  **StegoAgent (Post):** Frequency-Domain Steganography. Embeds payloads into DCT coefficients using 2D Fourier transforms.
+10. **CleanerAgent (Post):** Formal Logic Verifier. Generates cleanup scripts and verifies the restoration of the environment state.
 
 ## 🚀 Getting Started
 

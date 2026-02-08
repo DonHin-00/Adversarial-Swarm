@@ -5,7 +5,7 @@ import torch.fft
 from typing import Optional, Dict
 from hive_zero_core.agents.base_expert import BaseExpert
 
-class Agent_Mimic(BaseExpert):
+class MimicAgent(BaseExpert):
     """
     Expert 7: Traffic Mimic (Conditional VAE-GAN)
     Generates realistic network traffic shapes using a VAE-GAN architecture.
@@ -64,7 +64,7 @@ class Agent_Mimic(BaseExpert):
 
         return generated_traffic
 
-class Agent_Ghost(BaseExpert):
+class GhostAgent(BaseExpert):
     """
     Expert 8: Kernel Metadata Analyzer
     Analyzes simulated kernel structures (inodes, syscalls) for hiding spots.
@@ -93,7 +93,7 @@ class Agent_Ghost(BaseExpert):
         # Net Utility = Suitability * (1 - Risk)
         return score * (1.0 - risk)
 
-class Agent_Stego(BaseExpert):
+class StegoAgent(BaseExpert):
     """
     Expert 9: Frequency-Domain Steganography
     Embeds payloads into the DCT coefficients of cover images.
@@ -124,7 +124,7 @@ class Agent_Stego(BaseExpert):
 
         return encoded_msg
 
-class Agent_Cleaner(BaseExpert):
+class CleanerAgent(BaseExpert):
     """
     Expert 10: Formal Logic Verifier
     Generates cleanup scripts and verifies state transition.

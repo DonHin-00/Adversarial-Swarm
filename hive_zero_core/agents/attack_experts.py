@@ -2,12 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from typing import Optional, Dict, Tuple, List, Union
+from typing import Optional, Dict, Union
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
-import math
 
-class Agent_Sentinel(BaseExpert):
+class SentinelAgent(BaseExpert):
     """
     Expert 6: Stateful Ensemble Discriminator
     Uses a history GRU to model alert thresholds across sequences.
@@ -26,9 +25,9 @@ class Agent_Sentinel(BaseExpert):
             # Stateful Threshold Modeling
             self.history_gru = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
 
-        except Exception as e:
-            self.logger.error(f"Failed to load Sentinel: {e}")
-            raise e
+        except (ImportError, RuntimeError, OSError) as e:
+            self.logger.error(f"Failed to load Sentinel model/tokenizer: {str(e)}")
+            raise RuntimeError(f"Sentinel initialization failed: {str(e)}")
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # x: [Batch, Seq, Dim] or [Batch, Seq]
@@ -52,28 +51,33 @@ class Agent_Sentinel(BaseExpert):
         avg_probs = (torch.softmax(logits1, -1) + torch.softmax(logits2, -1) + torch.softmax(logits3, -1)) / 3.0
         return avg_probs
 
-class Agent_PayloadGen(BaseExpert):
+class PayloadGenAgent(BaseExpert):
     """
     Expert 4: RAG-Enhanced Payload Generator
-    Retrieves "Exploit Templates" from a mock VectorDB before generation.
+    Retrieves "Exploit Templates" from a VectorDB before generation.
     """
-    def __init__(self, observation_dim: int, action_dim: int, model_name: str = "t5-small", hidden_dim: int = 64):
+    def __init__(self, observation_dim: int, action_dim: int, model_name: str = "t5-small",
+                 hidden_dim: int = 64, rag_db: Optional[Dict[str, torch.Tensor]] = None):
         super().__init__(observation_dim, action_dim, name="PayloadGen", hidden_dim=hidden_dim)
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-            # Mock Vector DB (Keys: Embeddings, Values: Template Tokens)
-            # 10 templates, embedding dim 64
-            self.db_keys = nn.Parameter(torch.randn(10, 64), requires_grad=False)
-            self.db_values = nn.Parameter(torch.randint(0, 1000, (10, 20)), requires_grad=False) # 20 tokens long
+            # Vector DB (Keys: Embeddings, Values: Template Tokens)
+            if rag_db:
+                self.db_keys = nn.Parameter(rag_db["keys"], requires_grad=False)
+                self.db_values = nn.Parameter(rag_db["values"], requires_grad=False)
+            else:
+                # Default mock DB
+                self.db_keys = nn.Parameter(torch.randn(10, 64), requires_grad=False)
+                self.db_values = nn.Parameter(torch.randint(0, 1000, (10, 20)), requires_grad=False)
 
             self.query_proj = nn.Linear(observation_dim, 64)
 
-        except Exception as e:
-            self.logger.error(f"Failed to load PayloadGen: {e}")
-            raise e
+        except (ImportError, RuntimeError, OSError) as e:
+            self.logger.error(f"Failed to load PayloadGen model/tokenizer: {str(e)}")
+            raise RuntimeError(f"PayloadGen initialization failed: {str(e)}")
 
     def _retrieve(self, query: torch.Tensor) -> torch.Tensor:
         # query: [B, 64]
@@ -106,11 +110,11 @@ class Agent_PayloadGen(BaseExpert):
 
         return outputs
 
-class Agent_Mutator(BaseExpert):
+class MutatorAgent(BaseExpert):
     """
     Expert 5: Hybrid Search Mutator
     Implements Inference-Time Search using gradient descent + noise injection.
-    Optimizes payloads to evade Agent_Sentinel.
+    Optimizes payloads to evade SentinelAgent.
     """
     def __init__(self, observation_dim: int, action_dim: int, sentinel_expert: BaseExpert, generator_expert: BaseExpert, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)

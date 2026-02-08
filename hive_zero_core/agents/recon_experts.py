@@ -16,7 +16,7 @@ class GNNModule(nn.Module):
         x = self.conv2(x, edge_index)
         return x
 
-class Agent_Cartographer(BaseExpert):
+class CartographerAgent(BaseExpert):
     """
     Expert 1: Temporal Graph Attention Network (T-GAT)
     Utilizes GATv2Conv and GRU to model node history and complex topology.
@@ -59,7 +59,7 @@ class Agent_Cartographer(BaseExpert):
         else:
             return torch.zeros(x.size(0), self.action_dim, device=x.device)
 
-class Agent_DeepScope(BaseExpert):
+class DeepScopeAgent(BaseExpert):
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="DeepScope", hidden_dim=hidden_dim)
         self.priority_net = nn.Linear(observation_dim, action_dim)
@@ -67,16 +67,17 @@ class Agent_DeepScope(BaseExpert):
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         return self.priority_net(x)
 
-class Agent_Chronos(BaseExpert):
+class ChronosAgent(BaseExpert):
     """
     Expert 3: Transformer-Enhanced Forecasting
     Uses a Transformer Encoder with causal masking to forecast packet inter-arrival times.
     """
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64, nhead: int = 4, num_layers: int = 2):
+    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64, nhead: int = 4, num_layers: int = 2, max_seq_len: int = 1000):
         super().__init__(observation_dim, action_dim, name="Chronos", hidden_dim=hidden_dim)
+        self.max_seq_len = max_seq_len
 
         self.embedding = nn.Linear(1, hidden_dim)
-        self.pos_encoder = nn.Parameter(torch.randn(1, 1000, hidden_dim)) # Max seq length 1000
+        self.pos_encoder = nn.Parameter(torch.randn(1, max_seq_len, hidden_dim))
 
         encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=nhead, batch_first=True)
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
@@ -92,6 +93,12 @@ class Agent_Chronos(BaseExpert):
             x = x.unsqueeze(-1) # [batch, seq_len, 1]
 
         batch_size, seq_len, _ = x.shape
+
+        # Hardening: Check sequence length
+        if seq_len > self.max_seq_len:
+             self.logger.warning(f"Input sequence length {seq_len} exceeds max_seq_len {self.max_seq_len}. Truncating.")
+             x = x[:, -self.max_seq_len:, :]
+             seq_len = self.max_seq_len
 
         # 1. Embedding + Positional Encoding
         h = self.embedding(x) + self.pos_encoder[:, :seq_len, :]

@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, TypedDict
 from hive_zero_core.utils.logging_config import setup_logger
 from hive_zero_core.memory.graph_store import HeteroLogEncoder
-from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
-from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
-from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
+from hive_zero_core.agents.recon_experts import CartographerAgent, DeepScopeAgent, ChronosAgent
+from hive_zero_core.agents.attack_experts import SentinelAgent, PayloadGenAgent, MutatorAgent
+from hive_zero_core.agents.post_experts import MimicAgent, GhostAgent, StegoAgent, CleanerAgent
 
 class NoisyGatingNetwork(nn.Module):
     def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64, noise_epsilon: float = 1e-2):
@@ -31,6 +31,19 @@ class NoisyGatingNetwork(nn.Module):
         weights = F.softmax(logits, dim=-1)
         return weights, logits
 
+class HiveResults(TypedDict, total=False):
+    topology: torch.Tensor
+    constraints: torch.Tensor
+    timing: torch.Tensor
+    raw_payload: torch.Tensor
+    optimized_payload: torch.Tensor
+    defense_score: torch.Tensor
+    traffic_shape: torch.Tensor
+    hiding_spot: torch.Tensor
+    covert_channel: torch.Tensor
+    cleanup: torch.Tensor
+    gating_weights: torch.Tensor
+
 class HiveMind(nn.Module):
     def __init__(self, observation_dim: int = 64):
         super().__init__()
@@ -41,20 +54,20 @@ class HiveMind(nn.Module):
         self.log_encoder = HeteroLogEncoder(node_embed_dim=observation_dim)
 
         # 2. Experts
-        self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)
-        self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10)
-        self.expert_chronos = Agent_Chronos(1, action_dim=1)
+        self.expert_cartographer = CartographerAgent(observation_dim, action_dim=observation_dim)
+        self.expert_deepscope = DeepScopeAgent(observation_dim, action_dim=10)
+        self.expert_chronos = ChronosAgent(1, action_dim=1)
 
-        self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
-        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)
-        self.expert_mutator = Agent_Mutator(observation_dim, action_dim=128,
+        self.expert_sentinel = SentinelAgent(observation_dim, action_dim=2)
+        self.expert_payloadgen = PayloadGenAgent(observation_dim, action_dim=128)
+        self.expert_mutator = MutatorAgent(observation_dim, action_dim=128,
                                            sentinel_expert=self.expert_sentinel,
                                            generator_expert=self.expert_payloadgen)
 
-        self.expert_mimic = Agent_Mimic(observation_dim, action_dim=2)
-        self.expert_ghost = Agent_Ghost(observation_dim, action_dim=5)
-        self.expert_stego = Agent_Stego(observation_dim, action_dim=64)
-        self.expert_cleaner = Agent_Cleaner(observation_dim, action_dim=10)
+        self.expert_mimic = MimicAgent(observation_dim, action_dim=2)
+        self.expert_ghost = GhostAgent(observation_dim, action_dim=5)
+        self.expert_stego = StegoAgent(observation_dim, action_dim=64)
+        self.expert_cleaner = CleanerAgent(observation_dim, action_dim=10)
 
         self.experts = nn.ModuleList([
             self.expert_cartographer,
@@ -72,7 +85,7 @@ class HiveMind(nn.Module):
         # 3. Gating
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
 
-    def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
+    def forward(self, raw_logs: List[Dict], top_k: int = 3) -> HiveResults:
         """
         Main Forward Pass with Noisy Gating.
         """

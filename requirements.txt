@@ -6,3 +6,7 @@ networkx
 scikit-learn
 numpy
 pandas
+pytest
+pytest-cov
+black
+isort

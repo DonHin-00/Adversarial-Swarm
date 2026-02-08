@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Dict, Optional, Any, Tuple, Union
+from typing import Dict, Optional, Any, Union
 from abc import ABC, abstractmethod
 from hive_zero_core.utils.logging_config import setup_logger
 from torch_geometric.data import HeteroData
@@ -16,6 +16,12 @@ class BaseExpert(nn.Module, ABC):
 
         # Gating Logic
         self.is_active = False
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(name='{self.name}', obs_dim={self.observation_dim}, action_dim={self.action_dim})"
+
+    def __str__(self) -> str:
+        return f"[{self.name}] Agent (Active: {self.is_active})"
 
     def forward(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
