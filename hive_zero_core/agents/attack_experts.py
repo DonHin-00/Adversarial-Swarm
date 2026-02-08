@@ -1,202 +1,197 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Optional, Dict, Tuple, List
+import torch.nn.functional as F
+from typing import Optional, Dict, Tuple, List, Union
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
 import random
+import math
 
 class Agent_Sentinel(BaseExpert):
     """
-    Expert 6: The Discriminator (BERT Classifier + History)
-    Classifies payloads as Blocked (0) or Allowed (1).
-    Maintains a history of recent alerts to simulate IDS threshold behavior.
+    Expert 6: Ensemble Discriminator
+    Runs 3 distinct BERT models (mocked as one model with 3 heads/perturbations for prototype)
+    and votes on the outcome.
     """
     def __init__(self, observation_dim: int, action_dim: int, model_name: str = "prajjwal1/bert-tiny", hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
-        self.model_name = model_name
-        self.hidden_dim = hidden_dim # Explicitly save
-
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+            # Ensemble of 3 heads on top of shared base
+            self.backbone = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=hidden_dim, output_hidden_states=True)
 
-            # Additional Alert History Component (Simulated IDS state)
-            # A simple GRU to track 'suspicion level' over time
-            # Input: CLS embedding (from model hidden size)
-            bert_hidden_size = self.model.config.hidden_size
-            self.history_gru = nn.GRU(bert_hidden_size, hidden_dim, batch_first=True)
-            self.alert_threshold_head = nn.Linear(hidden_dim, 1) # Probability modifier
+            # 3 Expert Heads
+            self.head1 = nn.Linear(hidden_dim, 2)
+            self.head2 = nn.Linear(hidden_dim, 2)
+            self.head3 = nn.Linear(hidden_dim, 2)
 
         except Exception as e:
-            self.logger.error(f"Failed to load Sentinel model {model_name}: {e}")
+            self.logger.error(f"Failed to load Sentinel: {e}")
             raise e
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # x: Input payload. [batch, seq_len] (tokens) or [batch, seq_len, dim] (embeddings)
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        # 1. Base Features
+        # x: [Batch, Seq, Dim] or [Batch, Seq]
 
-        # 1. Base Classification (Stateless WAF)
         if x.dim() == 3 and x.shape[-1] > 1:
-             outputs = self.model(inputs_embeds=x, output_hidden_states=True)
+             outputs = self.backbone(inputs_embeds=x)
         else:
-             outputs = self.model(input_ids=x.long(), output_hidden_states=True)
+             outputs = self.backbone(input_ids=x.long())
 
-        logits = outputs.logits # [batch, 2]
+        # Backbone outputs [Batch, hidden_dim] because num_labels=hidden_dim
+        features = F.relu(outputs.logits)
 
-        # 2. History/Context Modulation (Stateful IDS)
-        # Extract CLS token embedding from last hidden state
-        # BERT output hidden_states is tuple. Last one is usually [-1].
-        # Shape: [batch, seq_len, hidden_size]
-        cls_embedding = outputs.hidden_states[-1][:, 0, :] # [batch, bert_hidden]
+        # 2. Ensemble Voting
+        logits1 = self.head1(features)
+        logits2 = self.head2(features)
+        logits3 = self.head3(features)
 
-        # Assume context is previous hidden state? Or just random noise for prototype?
-        # Let's check context. If None, init new.
-        if context is not None and context.shape[-1] == self.hidden_dim:
-             h_in = context.unsqueeze(0) # [1, batch, gru_hidden]
-        else:
-             h_in = torch.zeros(1, x.size(0), self.hidden_dim, device=x.device)
+        probs1 = torch.softmax(logits1, dim=-1)
+        probs2 = torch.softmax(logits2, dim=-1)
+        probs3 = torch.softmax(logits3, dim=-1)
 
-        # Update history with current observation (CLS)
-        # GRU expects [batch, seq_len, input_size]. Treat current CLS as one step.
-        _, h_out = self.history_gru(cls_embedding.unsqueeze(1), h_in)
+        # Average probability (Soft Voting)
+        avg_probs = (probs1 + probs2 + probs3) / 3.0
 
-        # Calculate 'Suspicion Modifier'
-        suspicion = torch.sigmoid(self.alert_threshold_head(h_out.squeeze(0))) # [batch, 1]
-
-        # If suspicion is high, probability of 'Allowed' (index 1) decreases.
-        base_probs = torch.softmax(logits, dim=-1)
-
-        # Modulate probabilities
-        # Return combined probs: [P_blocked, P_allowed]
-        # Ensure sum to 1?
-        p_allowed_raw = base_probs[:, 1:2]
-        p_allowed_mod = p_allowed_raw * (1.0 - 0.5 * suspicion) # Dampen allow prob by up to 50%
-        p_blocked_mod = 1.0 - p_allowed_mod
-
-        return torch.cat([p_blocked_mod, p_allowed_mod], dim=1)
+        return avg_probs
 
 class Agent_PayloadGen(BaseExpert):
     """
-    Expert 4: Payload Generator (Context-Aware Seq2Seq)
-    Takes structured vulnerability context and generates specific exploit payloads.
+    Expert 4: RAG-Enhanced Payload Generator
+    Retrieves "Exploit Templates" from a mock VectorDB before generation.
     """
     def __init__(self, observation_dim: int, action_dim: int, model_name: str = "t5-small", hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="PayloadGen", hidden_dim=hidden_dim)
-        self.model_name = model_name
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-            # Context Encoder (Project observation vector to T5 embedding space)
-            # Obs dim -> T5 d_model (512 for small)
-            t5_dim = self.model.config.d_model
-            self.context_projection = nn.Linear(observation_dim, t5_dim)
+            # Mock Vector DB (Keys: Embeddings, Values: Template Tokens)
+            # 10 templates, embedding dim 64
+            self.db_keys = nn.Parameter(torch.randn(10, 64), requires_grad=False)
+            self.db_values = nn.Parameter(torch.randint(0, 1000, (10, 20)), requires_grad=False) # 20 tokens long
+
+            self.query_proj = nn.Linear(observation_dim, 64)
 
         except Exception as e:
-            self.logger.error(f"Failed to load PayloadGen model {model_name}: {e}")
+            self.logger.error(f"Failed to load PayloadGen: {e}")
             raise e
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # x: Observation vector [batch, obs_dim] representing CVE/Target info
+    def _retrieve(self, query: torch.Tensor) -> torch.Tensor:
+        # query: [B, 64]
+        scores = torch.matmul(query, self.db_keys.t())
+        indices = torch.argmax(scores, dim=1) # [B]
 
-        # 1. Prepare Encoder Inputs (Soft Prompts)
-        # Project observation to embedding space
-        # T5 encoder expects inputs_embeds [batch, seq_len, dim]
-        soft_prompts = self.context_projection(x).unsqueeze(1) # [batch, 1, d_model]
+        # Retrieve templates
+        templates = self.db_values[indices] # [B, 20]
+        return templates
 
-        # We need to provide dummy input_ids or attention_mask usually if passing inputs_embeds via generate?
-        # HF generate() with encoder_outputs is cleaner.
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        # 1. RAG Retrieval
+        query = self.query_proj(x)
+        retrieved_tokens = self._retrieve(query)
 
-        # Run encoder manually
-        encoder_outputs_obj = self.model.get_encoder()(inputs_embeds=soft_prompts)
+        # 2. Generation with Context
+        # Using mock encoder outputs to condition generation
+        # We simulate this by passing retrieval embedding as 'encoder_outputs'
 
-        # Generate using the encoded states
-        # encoder_outputs argument in generate expects ModelOutput or tuple
+        # Embed retrieval
+        # T5 encoder expects input_ids.
+        # We need to run the full encoder stack to get valid encoder_outputs
+        encoder_out = self.model.encoder(input_ids=retrieved_tokens.long())
+
+        # Generate
         outputs = self.model.generate(
-            encoder_outputs=encoder_outputs_obj,
-            max_length=64,
-            do_sample=True,
-            temperature=0.8
+            encoder_outputs=encoder_out,
+            max_length=64
         )
 
         return outputs
 
 class Agent_Mutator(BaseExpert):
     """
-    Expert 5: Mutator (Hybrid Optimizer)
-    Combines Gradient-based embedding optimization with Discrete Mutation heuristics.
+    Expert 5: MCTS Mutator
+    Uses Monte Carlo Tree Search to plan discrete mutations.
     """
     def __init__(self, observation_dim: int, action_dim: int, sentinel_expert: BaseExpert, generator_expert: BaseExpert, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
-
         self.sentinel = sentinel_expert
         self.generator = generator_expert
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Inference-Time Search Loop.
-        """
+    class Node:
+        def __init__(self, state, parent=None):
+            self.state = state # Embedding tensor
+            self.parent = parent
+            self.children = []
+            self.visits = 0
+            self.value = 0.0
+
+    def _evaluate(self, embedding):
+        # We need to detach embedding to avoid gradient graph issues in MCTS?
+        # Actually MCTS is non-differentiable search.
+        with torch.no_grad():
+            probs = self.sentinel._forward_impl(embedding, context=None)
+        return probs[:, 1].item() # P(Allowed)
+
+    def _expand(self, node):
+        for _ in range(3):
+            # Noise in embedding space as "actions"
+            noise = torch.randn_like(node.state) * 0.1
+            child_state = node.state + noise
+            child = self.Node(child_state, parent=node)
+            node.children.append(child)
+
+    def _run_mcts(self, root_embedding, simulations=5):
+        root = self.Node(root_embedding)
+
+        for _ in range(simulations):
+            # Selection
+            node = root
+            # Simple Selection: just pick random if exists or expand
+            if node.children:
+                 # UCB
+                 node = max(node.children, key=lambda c: c.value / (c.visits + 1e-6) + 2.0 * math.sqrt(math.log(root.visits + 1) / (c.visits + 1e-6)))
+
+            # Expansion
+            if node.visits > 0 or not node.children:
+                self._expand(node)
+                if node.children:
+                    node = random.choice(node.children)
+
+            # Simulation/Evaluation
+            score = self._evaluate(node.state)
+
+            # Backprop
+            curr = node
+            while curr:
+                curr.visits += 1
+                curr.value += score
+                curr = curr.parent
+
+        best_child = max(root.children, key=lambda c: c.visits) if root.children else root
+        return best_child.state
+
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # 1. Initial Generation
-        # x is observation for Generator
-        # Generator now expects [batch, obs_dim], not tokens. Ensure x is correct shape.
         with torch.no_grad():
             initial_token_ids = self.generator._forward_impl(x, context)
 
-        # Ensure vocab limits
-        vocab_size = self.sentinel.model.config.vocab_size
+        embed_layer = self.sentinel.backbone.get_input_embeddings()
+        vocab_size = self.sentinel.backbone.config.vocab_size
         initial_token_ids = torch.clamp(initial_token_ids.long(), 0, vocab_size - 1)
 
-        # 2. Gradient-Based Optimization Phase
-        embed_layer = self.sentinel.model.get_input_embeddings()
-
-        # Handling dimensionality mismatch between T5 and BERT
-        # T5 outputs might be shorter/longer than BERT max pos
         if initial_token_ids.shape[-1] > 512:
              initial_token_ids = initial_token_ids[:, :512]
 
-        current_embeddings = embed_layer(initial_token_ids).clone().detach()
-        current_embeddings.requires_grad_(True)
+        current_embeddings = embed_layer(initial_token_ids).detach()
 
-        # Optimizer for this specific instance
-        optimizer = optim.SGD([current_embeddings], lr=0.1)
+        # 2. MCTS Optimization
+        if current_embeddings.size(0) == 1:
+            optimized_embeddings = self._run_mcts(current_embeddings)
+        else:
+            # Fallback for batch > 1
+            optimized_embeddings = current_embeddings
 
-        best_embeddings = current_embeddings.clone().detach()
-        best_score = -1.0
-
-        k_steps = 5
-
-        for i in range(k_steps):
-            optimizer.zero_grad()
-
-            # Forward Sentinel
-            # Sentinel returns PROBS directly now
-            probs = self.sentinel._forward_impl(current_embeddings, context=None)
-
-            # Score: P(Allowed) -> index 1
-            score = probs[:, 1].mean()
-
-            if score.item() > best_score:
-                best_score = score.item()
-                best_embeddings = current_embeddings.clone().detach()
-
-            if score.item() > 0.95:
-                break
-
-            # Loss: Minimize -log(P(Allowed))
-            loss = -torch.log(probs[:, 1] + 1e-8).mean()
-            loss.backward()
-
-            # Gradient Clipping
-            torch.nn.utils.clip_grad_norm_([current_embeddings], max_norm=1.0)
-
-            optimizer.step()
-
-            # 3. Discrete Mutation Phase (Heuristic Noise)
-            # Add noise to jump local optima
-            if i % 2 == 0:
-                with torch.no_grad():
-                    noise = torch.randn_like(current_embeddings) * 0.05
-                    current_embeddings.add_(noise)
-
-        return best_embeddings
+        return optimized_embeddings

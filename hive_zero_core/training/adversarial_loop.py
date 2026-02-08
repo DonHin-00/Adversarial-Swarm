@@ -2,93 +2,115 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import logging
+import numpy as np
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.training.rewards import CompositeReward
 from hive_zero_core.memory.replay_buffer import PrioritizedReplayBuffer
+from hive_zero_core.environment.hive_env import HiveZeroEnv
 
 def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
     logger = logging.getLogger("HiveTraining")
     logger.setLevel(logging.INFO)
 
-    # 1. Initialize HiveMind
+    # 1. Initialize HiveMind (The Agent)
     hive = HiveMind(observation_dim=64)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     hive.to(device)
     hive.train()
 
-    # 2. Optimizer
-    # Include gating noise parameters
+    # 2. Initialize Environment (The Target)
+    env = HiveZeroEnv(observation_dim=64)
+
+    # 3. Optimizer
     params = list(hive.gating_network.parameters())
     for expert in hive.experts:
-        if expert.name == "Mutator":
+        if expert.name == "Sentinel":
+            # Sentinel is part of the 'Blue Team' logic, implicitly trained or pre-trained.
+            # Here we might freeze it or train it adversarially.
             pass
-        elif expert.name == "Sentinel":
-            # Optional: Train sentinel too? For adversarial loop, usually fixed or alternating.
-            # Let's freeze sentinel for now to treat it as environment.
-            pass
-        elif expert.name in ["Cartographer", "DeepScope", "Mimic", "Ghost"]:
+        elif expert.name in ["Cartographer", "DeepScope", "Mimic", "Ghost", "Chronos", "PayloadGen", "Cleaner", "Stego"]:
+            # Note: PayloadGen has fixed RAG DB but trainable generator parts if any
             params.extend(list(expert.parameters()))
 
     optimizer = optim.Adam(params, lr=0.001)
 
-    # 3. Reward & Replay
-    reward_calc = CompositeReward()
-    replay_buffer = PrioritizedReplayBuffer(capacity=1000)
-
     # 4. Training Loop
     for epoch in range(num_epochs):
-        # Curriculum: Increase difficulty (thresholds)
-        # Not implemented explicitly here, but logic placeholder
+        # Reset Env
+        obs_np, _ = env.reset()
 
-        optimizer.zero_grad()
+        # Episode Loop
+        total_episode_reward = 0
+        done = False
 
-        # --- Environment Step (Mocked) ---
-        # Generate random logs to simulate observation
-        mock_logs = [
-            {'src_ip': '192.168.1.1', 'dst_ip': '10.0.0.5', 'port': 80, 'proto': 6},
-            {'src_ip': '10.0.0.5', 'dst_ip': '8.8.8.8', 'port': 53, 'proto': 17}
-        ]
+        while not done:
+            optimizer.zero_grad()
 
-        # --- Forward Pass ---
-        results = hive.forward(mock_logs, top_k=3)
+            # --- Agent Step ---
+            # Convert Obs to Logs format for HiveMind
+            # HiveMind expects List[Dict]. Env gives vector.
+            # We mock the translation:
+            mock_logs = [{'src_ip': '1.1.1.1', 'dst_ip': '2.2.2.2', 'port': 80, 'proto': 6}] # Using dummy for graph structure
+            # But we inject the Env's observation features into the graph manually?
+            # Or simpler: HiveMind forward handles the graph update.
+            # We assume Env Obs *is* the feature vector for the global node?
 
-        # --- Loss Calculation ---
-        total_loss = torch.tensor(0.0, device=device, requires_grad=True)
+            # Run HiveMind
+            results = hive.forward(mock_logs, top_k=3)
 
-        # 1. Task Rewards
-        if "defense_score" in results:
-            score = results["defense_score"] # P(Allowed)
-            # Adv Loss: We want score -> 1. Loss = 1 - score? Or -log(score).
-            # Using -log(score)
-            loss_adv = -torch.log(score + 1e-8).mean()
-            total_loss = total_loss + loss_adv
+            # Extract Action for Env
+            # Env expects [128] vector.
+            # Aggregate expert outputs?
+            # Let's take 'raw_payload' (PayloadGen) or 'optimized_payload' (Mutator) if available.
+            # Fallback to zero.
 
-        # 2. Load Balancing Loss (Auxiliary)
-        # Avoid expert collapse. Minimize CV of gating weights squared?
-        if "gating_weights" in results:
-            weights = results["gating_weights"] # [batch, num_experts]
-            # Ideally variance should be low -> equal load? Or just high entropy?
-            # Maximize entropy: -sum(p log p). Minimize negative entropy.
-            entropy = -torch.sum(weights * torch.log(weights + 1e-8), dim=-1).mean()
-            loss_balance = -0.1 * entropy # Weight factor 0.1
-            total_loss = total_loss + loss_balance
+            action_tensor = torch.zeros(128, device=device)
+            if "optimized_payload" in results:
+                # payload might be [Batch, Seq, Dim] or similar. Flatten/Pool.
+                p = results["optimized_payload"]
+                if p.numel() > 0:
+                    flat = p.view(-1)
+                    if flat.size(0) >= 128:
+                        action_tensor = flat[:128]
+                    else:
+                        action_tensor[:flat.size(0)] = flat
 
-        # --- Backward Pass ---
-        total_loss.backward()
+            # --- Environment Step ---
+            action_np = action_tensor.detach().cpu().numpy()
+            next_obs_np, reward, terminated, truncated, info = env.step(action_np)
+            done = terminated or truncated
 
-        torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
-        optimizer.step()
+            total_episode_reward += reward
 
-        # --- Experience Replay Update ---
-        # Store transition? State is graph embedding. Action is experts selected. Reward is -loss.
-        # This is a bit abstract for direct RL update here without Q-network,
-        # but we can store for offline analysis or separate PPO learner.
+            # --- Loss Calculation ---
+            # 1. RL Reward Loss (Policy Gradient? Or Differentiable Simulation?)
+            # Since Env is non-differentiable (numpy), we usually need PPO/REINFORCE.
+            # But HiveMind parts (Sentinel loop) are differentiable.
+            # Mixed approach:
+            # - Use Sentinel Score (internal) as differentiable proxy for 'Detectability'.
+            # - Use Env Reward for external feedback.
+
+            loss_total = torch.tensor(0.0, device=device, requires_grad=True)
+
+            # Internal Adv Loss
+            if "defense_score" in results:
+                # Sentinel score (P(Allowed))
+                score = results["defense_score"]
+                loss_adv = -torch.log(score + 1e-8).mean()
+                loss_total = loss_total + loss_adv
+
+            # Load Balancing
+            if "gating_weights" in results:
+                w = results["gating_weights"]
+                entropy = -torch.sum(w * torch.log(w + 1e-8), dim=-1).mean()
+                loss_total = loss_total - 0.05 * entropy
+
+            # Backward
+            loss_total.backward()
+            torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
+            optimizer.step()
+
+            obs_np = next_obs_np
 
         if epoch % 1 == 0:
-            logger.info(f"Epoch {epoch}: Loss {total_loss.item()}")
-
-    logger.info("Training loop complete.")
-
-if __name__ == "__main__":
-    logging.basicConfig()
-    train_hive_mind_adversarial(num_epochs=2)
+            logger.info(f"Epoch {epoch}: Reward {total_episode_reward}")

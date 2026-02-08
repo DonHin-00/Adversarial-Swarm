@@ -1,155 +1,142 @@
 import torch
 import torch.nn as nn
-import logging
-from torch_geometric.data import Data
-from typing import List, Dict, Optional, Tuple, Set
+from torch_geometric.data import HeteroData
+from typing import List, Dict, Optional, Tuple
 import ipaddress
 import hashlib
 
-# Configure logger
-logger = logging.getLogger(__name__)
-
-class LogEncoder(nn.Module):
-    def __init__(self, node_feature_dim: int = 64, edge_feature_dim: int = 32):
+class HeteroLogEncoder(nn.Module):
+    """
+    Advanced Log Encoder producing Heterogeneous Graphs.
+    Nodes: IP, Port, Protocol
+    Edges: (IP, CONNECTS_TO, Port), (Port, USES, Protocol), (IP, COMMUNICATES_WITH, IP)
+    """
+    def __init__(self, node_embed_dim: int = 64):
         super().__init__()
-        self.node_feature_dim = node_feature_dim
-        self.edge_feature_dim = edge_feature_dim
+        self.node_embed_dim = node_embed_dim
 
-        # Encoders for node features
-        self.ip_projection = nn.Linear(32, node_feature_dim)
-
-        # Encoders for edge features
-        self.port_embedding = nn.Embedding(65536, edge_feature_dim)
-        self.proto_embedding = nn.Embedding(256, edge_feature_dim)
-
-        # Stateful Flow Tracking (TCP Stream Reassembly Simulation)
-        self.flow_state_dim = 16
-        # Input to GRU is [edge_feat_dim * 2] (port + proto)
-        self.flow_tracker = nn.GRUCell(edge_feature_dim * 2, self.flow_state_dim)
+        # Encoders for different node types
+        self.ip_encoder = nn.Linear(32, node_embed_dim)
+        self.port_encoder = nn.Embedding(65536, node_embed_dim)
+        self.proto_encoder = nn.Embedding(256, node_embed_dim)
 
         # Mappings
-        self.ip_to_idx: Dict[str, int] = {}
-        self.idx_to_ip: Dict[int, str] = {}
-        self.next_idx = 0
+        self.ip_map = {}
+        self.port_map = {}
+        self.proto_map = {}
 
-        # Flow State Cache: hash(5-tuple) -> tensor state
-        self.flow_states: Dict[str, torch.Tensor] = {}
+    def _get_idx(self, key, mapping):
+        if key not in mapping:
+            mapping[key] = len(mapping)
+        return mapping[key]
 
-    def _ip_to_bits(self, ip_str: str) -> torch.Tensor:
+    def _ip_to_tensor(self, ip_str: str) -> torch.Tensor:
         try:
             ip_int = int(ipaddress.IPv4Address(ip_str))
             bits = [float(x) for x in format(ip_int, '032b')]
             return torch.tensor(bits, dtype=torch.float32)
-        except (ipaddress.AddressValueError, ValueError):
+        except:
             return torch.zeros(32, dtype=torch.float32)
 
-    def _get_node_idx(self, ip: str) -> int:
-        if ip not in self.ip_to_idx:
-            idx = self.next_idx
-            self.ip_to_idx[ip] = idx
-            self.idx_to_ip[idx] = ip
-            self.next_idx += 1
-        return self.ip_to_idx[ip]
+    def update(self, logs: List[Dict]) -> HeteroData:
+        data = HeteroData()
 
-    def _get_flow_key(self, src, dst, sport, dport, proto) -> str:
-        return hashlib.md5(f"{src}:{sport}-{dst}:{dport}/{proto}".encode()).hexdigest()
+        # Lists for edges
+        ip_src_indices = []
+        ip_dst_indices = []
 
-    def update(self, logs: List[Dict]) -> Data:
-        """
-        Converts logs to Graph Data. Updates flow states.
-        """
-        if not logs:
-            return Data(
-                x=torch.zeros((0, self.node_feature_dim)),
-                edge_index=torch.empty((2, 0), dtype=torch.long),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2 + self.flow_state_dim))
-            )
+        ip_to_port_src = []
+        ip_to_port_dst = []
 
-        src_indices = []
-        dst_indices = []
-        edge_attr_inputs = []
-        flow_keys_list = []
+        port_to_proto_src = []
+        port_to_proto_dst = []
 
-        # Register nodes and prepare edges
+        # Reset mappings for batch (or persistent? For prototype, batch-local)
+        self.ip_map = {}
+        # Keep port/proto maps implies they are global concepts, but for graph indices
+        # we need 0..N for this batch's graph.
+        # Actually, PyG HeteroData expects features for nodes present in graph.
+        # So we rebuild local maps.
+
+        local_ip_map = {}
+        local_port_map = {}
+        local_proto_map = {}
+
         for log in logs:
-            src = log.get('src_ip', '0.0.0.0')
-            dst = log.get('dst_ip', '0.0.0.0')
-            sport = int(log.get('src_port', 0))
+            src_ip = log.get('src_ip', '0.0.0.0')
+            dst_ip = log.get('dst_ip', '0.0.0.0')
             dport = int(log.get('port', 0))
             proto = int(log.get('proto', 6))
 
-            # Validation
-            sport = max(0, min(65535, sport))
-            dport = max(0, min(65535, dport))
-            proto = max(0, min(255, proto))
+            s_idx = self._get_idx(src_ip, local_ip_map)
+            d_idx = self._get_idx(dst_ip, local_ip_map)
+            p_idx = self._get_idx(dport, local_port_map)
+            pr_idx = self._get_idx(proto, local_proto_map)
 
-            src_idx = self._get_node_idx(src)
-            dst_idx = self._get_node_idx(dst)
+            # Edges
+            # IP -> IP (Communication Flow)
+            ip_src_indices.append(s_idx)
+            ip_dst_indices.append(d_idx)
 
-            src_indices.append(src_idx)
-            dst_indices.append(dst_idx)
+            # IP -> Port (Destination Service)
+            ip_to_port_src.append(d_idx) # Destination IP owns the port
+            ip_to_port_dst.append(p_idx)
 
-            edge_attr_inputs.append((dport, proto))
+            # Port -> Protocol
+            port_to_proto_src.append(p_idx)
+            port_to_proto_dst.append(pr_idx)
 
-            flow_key = self._get_flow_key(src, dst, sport, dport, proto)
-            flow_keys_list.append(flow_key)
+        # Build Node Features
+        # IP Nodes
+        ip_features = []
+        # Sort by index to match
+        sorted_ips = sorted(local_ip_map.items(), key=lambda x: x[1])
+        for ip, _ in sorted_ips:
+            ip_features.append(self._ip_to_tensor(ip))
 
-        # Create Node Features
-        num_nodes = self.next_idx
-        x_raw_list = []
-        for i in range(num_nodes):
-            x_raw_list.append(self._ip_to_bits(self.idx_to_ip[i]))
-
-        if not x_raw_list:
-             # Should be covered by empty check, but safe fallback
-             x_tensor = torch.zeros(0, 32)
+        if ip_features:
+            x_ip = self.ip_encoder(torch.stack(ip_features))
         else:
-             x_tensor = torch.stack(x_raw_list)
+            x_ip = torch.zeros(0, self.node_embed_dim)
 
-        # Device consistency - assume cpu for encoding logic then model moves
-        # But if model is on GPU, these layers are on GPU.
-        # We need to respect self.device
-        device = next(self.parameters()).device
-        x_tensor = x_tensor.to(device)
-
-        x_embedded = self.ip_projection(x_tensor)
-
-        # Edge Index
-        edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long, device=device)
-
-        # Edge Attributes
-        ports = torch.tensor([attr[0] for attr in edge_attr_inputs], dtype=torch.long, device=device)
-        protos = torch.tensor([attr[1] for attr in edge_attr_inputs], dtype=torch.long, device=device)
-
-        port_embeds = self.port_embedding(ports)
-        proto_embeds = self.proto_embedding(protos)
-
-        basic_edge_attr = torch.cat([port_embeds, proto_embeds], dim=1)
-
-        # Update Flow States in Batch
-        # Prepare previous states tensor
-        prev_states_list = []
-        for key in flow_keys_list:
-            if key not in self.flow_states:
-                self.flow_states[key] = torch.zeros(self.flow_state_dim, device=device)
-            # Ensure cached state is on correct device (in case of movement)
-            if self.flow_states[key].device != device:
-                self.flow_states[key] = self.flow_states[key].to(device)
-
-            prev_states_list.append(self.flow_states[key])
-
-        if prev_states_list:
-            prev_stack = torch.stack(prev_states_list)
-
-            # Run GRU Cell
-            new_states = self.flow_tracker(basic_edge_attr, prev_stack)
-
-            # Update cache
-            for i, key in enumerate(flow_keys_list):
-                self.flow_states[key] = new_states[i].detach()
-
-            final_edge_attr = torch.cat([basic_edge_attr, new_states], dim=1)
+        # Port Nodes
+        sorted_ports = sorted(local_port_map.items(), key=lambda x: x[1])
+        port_indices = torch.tensor([p for p, _ in sorted_ports], dtype=torch.long)
+        if len(port_indices) > 0:
+            x_port = self.port_encoder(port_indices)
         else:
-            final_edge_attr = torch.zeros((0, self.edge_feature_dim * 2 + self.flow_state_dim), device=device)
+            x_port = torch.zeros(0, self.node_embed_dim)
 
-        return Data(x=x_embedded, edge_index=edge_index, edge_attr=final_edge_attr)
+        # Proto Nodes
+        sorted_protos = sorted(local_proto_map.items(), key=lambda x: x[1])
+        proto_indices = torch.tensor([p for p, _ in sorted_protos], dtype=torch.long)
+        if len(proto_indices) > 0:
+            x_proto = self.proto_encoder(proto_indices)
+        else:
+            x_proto = torch.zeros(0, self.node_embed_dim)
+
+        # Assign to Data
+        data['ip'].x = x_ip
+        data['port'].x = x_port
+        data['protocol'].x = x_proto
+
+        # Assign Edges
+        # flow: IP -> IP
+        if ip_src_indices:
+            data['ip', 'flow', 'ip'].edge_index = torch.tensor([ip_src_indices, ip_dst_indices], dtype=torch.long)
+        else:
+            data['ip', 'flow', 'ip'].edge_index = torch.empty(2, 0, dtype=torch.long)
+
+        # binds: IP -> Port
+        if ip_to_port_src:
+            data['ip', 'binds', 'port'].edge_index = torch.tensor([ip_to_port_src, ip_to_port_dst], dtype=torch.long)
+        else:
+            data['ip', 'binds', 'port'].edge_index = torch.empty(2, 0, dtype=torch.long)
+
+        # uses: Port -> Protocol
+        if port_to_proto_src:
+            data['port', 'uses', 'protocol'].edge_index = torch.tensor([port_to_proto_src, port_to_proto_dst], dtype=torch.long)
+        else:
+            data['port', 'uses', 'protocol'].edge_index = torch.empty(2, 0, dtype=torch.long)
+
+        return data
