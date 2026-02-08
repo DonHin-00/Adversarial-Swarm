@@ -8,22 +8,18 @@ import hashlib
 class HeteroLogEncoder(nn.Module):
     """
     Advanced Log Encoder producing Heterogeneous Graphs.
-    Nodes: IP, Port, Protocol
-    Edges: (IP, CONNECTS_TO, Port), (Port, USES, Protocol), (IP, COMMUNICATES_WITH, IP)
     """
     def __init__(self, node_embed_dim: int = 64):
         super().__init__()
         self.node_embed_dim = node_embed_dim
 
-        # Encoders for different node types
         self.ip_encoder = nn.Linear(32, node_embed_dim)
         self.port_encoder = nn.Embedding(65536, node_embed_dim)
         self.proto_encoder = nn.Embedding(256, node_embed_dim)
 
-        # Mappings
-        self.ip_map = {}
-        self.port_map = {}
-        self.proto_map = {}
+        self.ip_map: Dict[str, int] = {}
+        self.port_map: Dict[int, int] = {}
+        self.proto_map: Dict[int, int] = {}
 
     def _get_idx(self, key, mapping):
         if key not in mapping:
@@ -41,26 +37,18 @@ class HeteroLogEncoder(nn.Module):
     def update(self, logs: List[Dict]) -> HeteroData:
         data = HeteroData()
 
-        # Lists for edges
-        ip_src_indices = []
-        ip_dst_indices = []
+        ip_src_indices: List[int] = []
+        ip_dst_indices: List[int] = []
 
-        ip_to_port_src = []
-        ip_to_port_dst = []
+        ip_to_port_src: List[int] = []
+        ip_to_port_dst: List[int] = []
 
-        port_to_proto_src = []
-        port_to_proto_dst = []
+        port_to_proto_src: List[int] = []
+        port_to_proto_dst: List[int] = []
 
-        # Reset mappings for batch (or persistent? For prototype, batch-local)
-        self.ip_map = {}
-        # Keep port/proto maps implies they are global concepts, but for graph indices
-        # we need 0..N for this batch's graph.
-        # Actually, PyG HeteroData expects features for nodes present in graph.
-        # So we rebuild local maps.
-
-        local_ip_map = {}
-        local_port_map = {}
-        local_proto_map = {}
+        local_ip_map: Dict[str, int] = {}
+        local_port_map: Dict[int, int] = {}
+        local_proto_map: Dict[int, int] = {}
 
         for log in logs:
             src_ip = log.get('src_ip', '0.0.0.0')
@@ -73,70 +61,60 @@ class HeteroLogEncoder(nn.Module):
             p_idx = self._get_idx(dport, local_port_map)
             pr_idx = self._get_idx(proto, local_proto_map)
 
-            # Edges
-            # IP -> IP (Communication Flow)
             ip_src_indices.append(s_idx)
             ip_dst_indices.append(d_idx)
 
-            # IP -> Port (Destination Service)
-            ip_to_port_src.append(d_idx) # Destination IP owns the port
+            ip_to_port_src.append(d_idx)
             ip_to_port_dst.append(p_idx)
 
-            # Port -> Protocol
             port_to_proto_src.append(p_idx)
             port_to_proto_dst.append(pr_idx)
 
-        # Build Node Features
-        # IP Nodes
         ip_features = []
-        # Sort by index to match
         sorted_ips = sorted(local_ip_map.items(), key=lambda x: x[1])
         for ip, _ in sorted_ips:
             ip_features.append(self._ip_to_tensor(ip))
 
-        if ip_features:
-            x_ip = self.ip_encoder(torch.stack(ip_features))
-        else:
-            x_ip = torch.zeros(0, self.node_embed_dim)
+        # Ensure device consistency by inferring from model parameters
+        device = next(self.parameters()).device
 
-        # Port Nodes
+        if ip_features:
+            x_ip_raw = torch.stack(ip_features).to(device)
+            x_ip = self.ip_encoder(x_ip_raw)
+        else:
+            x_ip = torch.zeros((0, self.node_embed_dim), device=device)
+
         sorted_ports = sorted(local_port_map.items(), key=lambda x: x[1])
-        port_indices = torch.tensor([p for p, _ in sorted_ports], dtype=torch.long)
+        port_indices = torch.tensor([p for p, _ in sorted_ports], dtype=torch.long, device=device)
         if len(port_indices) > 0:
             x_port = self.port_encoder(port_indices)
         else:
-            x_port = torch.zeros(0, self.node_embed_dim)
+            x_port = torch.zeros((0, self.node_embed_dim), device=device)
 
-        # Proto Nodes
         sorted_protos = sorted(local_proto_map.items(), key=lambda x: x[1])
-        proto_indices = torch.tensor([p for p, _ in sorted_protos], dtype=torch.long)
+        proto_indices = torch.tensor([p for p, _ in sorted_protos], dtype=torch.long, device=device)
         if len(proto_indices) > 0:
             x_proto = self.proto_encoder(proto_indices)
         else:
-            x_proto = torch.zeros(0, self.node_embed_dim)
+            x_proto = torch.zeros((0, self.node_embed_dim), device=device)
 
-        # Assign to Data
         data['ip'].x = x_ip
         data['port'].x = x_port
         data['protocol'].x = x_proto
 
-        # Assign Edges
-        # flow: IP -> IP
         if ip_src_indices:
-            data['ip', 'flow', 'ip'].edge_index = torch.tensor([ip_src_indices, ip_dst_indices], dtype=torch.long)
+            data['ip', 'flow', 'ip'].edge_index = torch.tensor([ip_src_indices, ip_dst_indices], dtype=torch.long, device=device)
         else:
-            data['ip', 'flow', 'ip'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['ip', 'flow', 'ip'].edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
 
-        # binds: IP -> Port
         if ip_to_port_src:
-            data['ip', 'binds', 'port'].edge_index = torch.tensor([ip_to_port_src, ip_to_port_dst], dtype=torch.long)
+            data['ip', 'binds', 'port'].edge_index = torch.tensor([ip_to_port_src, ip_to_port_dst], dtype=torch.long, device=device)
         else:
-            data['ip', 'binds', 'port'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['ip', 'binds', 'port'].edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
 
-        # uses: Port -> Protocol
         if port_to_proto_src:
-            data['port', 'uses', 'protocol'].edge_index = torch.tensor([port_to_proto_src, port_to_proto_dst], dtype=torch.long)
+            data['port', 'uses', 'protocol'].edge_index = torch.tensor([port_to_proto_src, port_to_proto_dst], dtype=torch.long, device=device)
         else:
-            data['port', 'uses', 'protocol'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['port', 'uses', 'protocol'].edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
 
         return data
