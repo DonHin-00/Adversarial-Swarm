@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+from typing import Dict, Optional, Any, Union
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
 
@@ -26,6 +29,20 @@ class BaseExpert(nn.Module, ABC):
         context: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        self.is_active = False
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(name='{self.name}', obs_dim={self.observation_dim}, action_dim={self.action_dim})"
+
+    def __str__(self) -> str:
+        return f"[{self.name}] Agent (Active: {self.is_active})"
+
+    def forward(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Standardized forward pass for all experts.
+        Enforces Gating Logic (Sparse MoE).
+        """
+        # Hardening: Input validation (Relaxed for HeteroData)
         if not isinstance(x, (torch.Tensor, HeteroData)):
             self.logger.error(f"Input x must be Tensor or HeteroData, got {type(x)}")
             raise TypeError("Input x must be Tensor or HeteroData")

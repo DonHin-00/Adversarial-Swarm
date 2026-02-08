@@ -10,6 +10,15 @@ from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_S
 from hive_zero_core.agents.base_expert import BaseExpert
 from hive_zero_core.agents.defense_experts import Agent_Tarpit
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from typing import List, Dict, Optional, Tuple, Any, TypedDict
+from hive_zero_core.utils.logging_config import setup_logger
+from hive_zero_core.memory.graph_store import HeteroLogEncoder
+from hive_zero_core.agents.recon_experts import CartographerAgent, DeepScopeAgent, ChronosAgent
+from hive_zero_core.agents.attack_experts import SentinelAgent, PayloadGenAgent, MutatorAgent
+from hive_zero_core.agents.post_experts import MimicAgent, GhostAgent, StegoAgent, CleanerAgent
 
 class NoisyGatingNetwork(nn.Module):
     def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64, noise_epsilon: float = 1e-2):
@@ -34,6 +43,18 @@ class NoisyGatingNetwork(nn.Module):
         weights = F.softmax(logits, dim=-1)
         return weights, logits
 
+class HiveResults(TypedDict, total=False):
+    topology: torch.Tensor
+    constraints: torch.Tensor
+    timing: torch.Tensor
+    raw_payload: torch.Tensor
+    optimized_payload: torch.Tensor
+    defense_score: torch.Tensor
+    traffic_shape: torch.Tensor
+    hiding_spot: torch.Tensor
+    covert_channel: torch.Tensor
+    cleanup: torch.Tensor
+    gating_weights: torch.Tensor
 
 class HiveMind(nn.Module):
     def __init__(self, observation_dim: int = 64):
@@ -67,6 +88,21 @@ class HiveMind(nn.Module):
         self.expert_ghost = Agent_Ghost(observation_dim, action_dim=5)
         self.expert_stego = Agent_Stego(observation_dim, action_dim=64)
         self.expert_cleaner = Agent_Cleaner(observation_dim, action_dim=10)
+        # 2. Experts
+        self.expert_cartographer = CartographerAgent(observation_dim, action_dim=observation_dim)
+        self.expert_deepscope = DeepScopeAgent(observation_dim, action_dim=10)
+        self.expert_chronos = ChronosAgent(1, action_dim=1)
+
+        self.expert_sentinel = SentinelAgent(observation_dim, action_dim=2)
+        self.expert_payloadgen = PayloadGenAgent(observation_dim, action_dim=128)
+        self.expert_mutator = MutatorAgent(observation_dim, action_dim=128,
+                                           sentinel_expert=self.expert_sentinel,
+                                           generator_expert=self.expert_payloadgen)
+
+        self.expert_mimic = MimicAgent(observation_dim, action_dim=2)
+        self.expert_ghost = GhostAgent(observation_dim, action_dim=5)
+        self.expert_stego = StegoAgent(observation_dim, action_dim=64)
+        self.expert_cleaner = CleanerAgent(observation_dim, action_dim=10)
 
         # Cluster D: Active Defense (The Hunter)
         # Action dim 64 matches observation dim to simulate "port" coverage or full-spectrum noise
@@ -92,6 +128,11 @@ class HiveMind(nn.Module):
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:  # noqa: PLR0912, PLR0915
+    def forward(self, raw_logs: List[Dict], top_k: int = 3) -> HiveResults:
+        """
+        Main Forward Pass with Noisy Gating.
+        """
+        # 1. Encode
         data = self.log_encoder.update(raw_logs)
 
         device = next(self.parameters()).device
