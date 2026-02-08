@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, cast
 from hive_zero_core.utils.logging_config import setup_logger
 from hive_zero_core.memory.graph_store import HeteroLogEncoder
 from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
+from hive_zero_core.agents.base_expert import BaseExpert
 
 class NoisyGatingNetwork(nn.Module):
     def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64, noise_epsilon: float = 1e-2):
@@ -37,10 +38,8 @@ class HiveMind(nn.Module):
         self.logger = setup_logger("HiveMind")
         self.observation_dim = observation_dim
 
-        # 1. Data Layer (Updated to Hetero)
         self.log_encoder = HeteroLogEncoder(node_embed_dim=observation_dim)
 
-        # 2. Experts
         self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)
         self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10)
         self.expert_chronos = Agent_Chronos(1, action_dim=1)
@@ -69,44 +68,35 @@ class HiveMind(nn.Module):
             self.expert_cleaner
         ])
 
-        # 3. Gating
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
-        """
-        Main Forward Pass with Noisy Gating.
-        """
-        # 1. Encode
         data = self.log_encoder.update(raw_logs)
 
-        # Global State Embedding from HeteroData
-        # Aggregate IP nodes?
-        if 'ip' in data.node_types and data['ip'].x.size(0) > 0:
+        device = next(self.parameters()).device
+        if 'ip' in data.node_types and hasattr(data['ip'], 'x') and data['ip'].x.size(0) > 0:
             global_state = torch.mean(data['ip'].x, dim=0, keepdim=True)
         else:
-            global_state = torch.zeros(1, self.observation_dim, device=next(self.parameters()).device)
+            global_state = torch.zeros(1, self.observation_dim, device=device)
 
-        # 2. Gating
         weights, logits = self.gating_network(global_state, training=self.training)
 
-        # 3. Select Top-K
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 
-        results = {}
+        results: Dict[str, Any] = {}
 
-        for expert in self.experts:
+        for module in self.experts:
+            expert = cast(BaseExpert, module)
             expert.is_active = False
 
-        # 4. Execute Active Experts
         for idx in active_indices:
-            expert = self.experts[idx]
+            module = self.experts[idx]
+            expert = cast(BaseExpert, module)
             expert.is_active = True
 
             try:
-                # Handling HeteroData vs Tensor inputs based on Expert type
                 if expert.name == "Cartographer":
-                    # Expects HeteroData
                     out = expert(data)
                     results["topology"] = out
 

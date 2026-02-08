@@ -3,14 +3,10 @@ import numpy as np
 from typing import List, Dict, Any, Tuple
 
 class PrioritizedReplayBuffer:
-    """
-    Experience Replay for RL Agents with Priority.
-    Stores transitions (state, action, reward, next_state).
-    """
     def __init__(self, capacity: int = 10000, alpha: float = 0.6):
         self.capacity = capacity
         self.alpha = alpha
-        self.buffer = []
+        self.buffer: List[Tuple[Any, Any, Any, Any]] = []
         self.priorities = np.zeros((capacity,), dtype=np.float32)
         self.pos = 0
 
@@ -25,9 +21,9 @@ class PrioritizedReplayBuffer:
         self.priorities[self.pos] = max_prio
         self.pos = (self.pos + 1) % self.capacity
 
-    def sample(self, batch_size: int, beta: float = 0.4) -> Tuple[List, torch.Tensor, torch.Tensor]:
+    def sample(self, batch_size: int, beta: float = 0.4) -> Tuple[List[Any], np.ndarray, torch.Tensor]:
         if len(self.buffer) == 0:
-            return [], torch.tensor([]), torch.tensor([])
+            return [], np.array([]), torch.tensor([])
 
         probs = self.priorities[:len(self.buffer)] ** self.alpha
         probs /= probs.sum()

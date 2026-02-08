@@ -6,3 +6,6 @@ networkx
 scikit-learn
 numpy
 pandas
+fastapi
+uvicorn
+pydantic
