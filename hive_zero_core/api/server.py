@@ -13,6 +13,7 @@ app = FastAPI(title="HIVE-ZERO C2 Interface")
 hive = HiveMind(observation_dim=64)
 planner = StrategicPlanner(observation_dim=64)
 
+
 class LogEntry(BaseModel):
     src_ip: str
     dst_ip: str
@@ -20,14 +21,17 @@ class LogEntry(BaseModel):
     proto: int
     src_port: Optional[int] = 0
 
+
 class CommandRequest(BaseModel):
     logs: List[LogEntry]
     top_k: int = 3
     strategy_override: Optional[int] = None
 
+
 @app.get("/status")
 def status():
     return {"status": "online", "experts": len(hive.experts)}
+
 
 @app.post("/execute")
 def execute_swarm(request: CommandRequest):
@@ -36,8 +40,8 @@ def execute_swarm(request: CommandRequest):
     try:
         data = hive.log_encoder.update(raw_logs)
 
-        if 'ip' in data.node_types and data['ip'].x.size(0) > 0:
-            global_state = torch.mean(data['ip'].x, dim=0, keepdim=True)
+        if "ip" in data.node_types and data["ip"].x.size(0) > 0:
+            global_state = torch.mean(data["ip"].x, dim=0, keepdim=True)
         else:
             global_state = torch.zeros(1, 64)
 
@@ -53,16 +57,15 @@ def execute_swarm(request: CommandRequest):
             else:
                 formatted_results[k] = str(v)
 
-        return {
-            "strategy": current_goal,
-            "actions": formatted_results
-        }
+        return {"strategy": current_goal, "actions": formatted_results}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))  # noqa: B904
 
+
 def start_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 if __name__ == "__main__":
     start_server()

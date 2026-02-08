@@ -27,6 +27,7 @@ def test_all_modules_importable():
         except SyntaxError as e:
             pytest.fail(f"Syntax error in {name}: {e}")
 
+
 def test_readme_exists():
     """
     Ensure README.md exists and is not empty.
@@ -35,11 +36,13 @@ def test_readme_exists():
     assert readme.exists(), "README.md is missing"
     assert readme.stat().st_size > 0, "README.md is empty"
 
+
 def test_config_validity():
     """
     Ensure config.yaml exists and is valid YAML.
     """
     import yaml  # noqa: PLC0415
+
     config_path = Path("configs/config.yaml")
     if config_path.exists():
         with open(config_path, "r") as f:

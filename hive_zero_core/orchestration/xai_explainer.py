@@ -1,4 +1,3 @@
-
 import torch
 from torch import nn
 
@@ -8,6 +7,7 @@ class XAIExplainer:
     Explainability Module.
     Uses Gradient-based attribution to explain gating decisions.
     """
+
     def __init__(self, gating_network: nn.Module):
         self.gating_network = gating_network
 

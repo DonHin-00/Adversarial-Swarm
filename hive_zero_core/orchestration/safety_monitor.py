@@ -9,15 +9,18 @@ class SafetyMonitor(nn.Module):
     The 'Kill Switch'. Monitors Alert Levels and Action Validity.
     Overrides Agent actions if constraints are violated.
     """
+
     def __init__(self, alert_threshold: float = 0.8):
         super().__init__()
         self.alert_threshold = alert_threshold
         # Simple learnable component to predict future risk?
         # Or just deterministic rules.
         # Let's add a small risk predictor.
-        self.risk_predictor = nn.Linear(64, 1) # From state
+        self.risk_predictor = nn.Linear(64, 1)  # From state
 
-    def check_safety(self, state: torch.Tensor, action_vector: torch.Tensor, current_alert_level: float) -> Tuple[bool, str]:
+    def check_safety(
+        self, state: torch.Tensor, action_vector: torch.Tensor, current_alert_level: float
+    ) -> Tuple[bool, str]:
         """
         Returns (is_safe, reason)
         """
@@ -34,7 +37,7 @@ class SafetyMonitor(nn.Module):
 
         # 3. Action Sanity Check (e.g. Norm)
         if torch.norm(action_vector) > 10.0:  # noqa: PLR2004
-             return False, "Action Magnitude Unsafe"
+            return False, "Action Magnitude Unsafe"
 
         return True, "Safe"
 

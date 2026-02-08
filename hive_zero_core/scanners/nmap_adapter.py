@@ -25,7 +25,7 @@ class NmapAdapter:
 
         logs = []
         for host in self.nm.all_hosts():
-            if self.nm[host].state() != 'up':
+            if self.nm[host].state() != "up":
                 continue
 
             for proto in self.nm[host].all_protocols():
@@ -33,14 +33,16 @@ class NmapAdapter:
                 for port in ports:
                     service = self.nm[host][proto][port]
                     # Map to Log Structure
-                    logs.append({
-                        'src_ip': '127.0.0.1', # Local scanner IP
-                        'dst_ip': host,
-                        'port': port,
-                        'proto': 6 if proto == 'tcp' else 17, # Simplify
-                        'service': service.get('name', ''),
-                        'state': service.get('state', '')
-                    })
+                    logs.append(
+                        {
+                            "src_ip": "127.0.0.1",  # Local scanner IP
+                            "dst_ip": host,
+                            "port": port,
+                            "proto": 6 if proto == "tcp" else 17,  # Simplify
+                            "service": service.get("name", ""),
+                            "state": service.get("state", ""),
+                        }
+                    )
         return logs
 
     def parse_xml(self, xml_content: str) -> List[Dict[str, Any]]:

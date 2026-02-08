@@ -11,15 +11,21 @@ import random
 import math
 import re
 
+
 class Agent_Sentinel(BaseExpert):  # noqa: N801
     """
     Expert 6: Local WAF Verifier (OWASP CRS Regex + BERT Ensemble)
     """
-    def __init__(self, observation_dim: int, action_dim: int, model_name: str = "prajjwal1/bert-tiny", hidden_dim: int = 64):
+
+    def __init__(
+        self, observation_dim: int, action_dim: int, model_name: str = "prajjwal1/bert-tiny", hidden_dim: int = 64
+    ):
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.backbone = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=hidden_dim, output_hidden_states=True)
+            self.backbone = AutoModelForSequenceClassification.from_pretrained(
+                model_name, num_labels=hidden_dim, output_hidden_states=True
+            )
             self.head = nn.Linear(hidden_dim, 2)
 
             self.rules = [
@@ -35,7 +41,7 @@ class Agent_Sentinel(BaseExpert):  # noqa: N801
         except Exception as e:
             # Fallback if model load fails (e.g. no internet in restricted CI)
             print(f"Failed to load Sentinel model: {e}")
-            self.backbone = None # Handle in forward
+            self.backbone = None  # Handle in forward
 
     def check_waf(self, payload_str: str) -> float:
         for rule in self.rules:
@@ -43,23 +49,27 @@ class Agent_Sentinel(BaseExpert):  # noqa: N801
                 return 1.0
         return 0.0
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         if self.backbone is None:
-             return torch.zeros(x.size(0), 2, device=x.device)
+            return torch.zeros(x.size(0), 2, device=x.device)
 
         if x.dim() == 3 and x.shape[-1] > 1:  # noqa: PLR2004
-             outputs = self.backbone(inputs_embeds=x)
+            outputs = self.backbone(inputs_embeds=x)
         else:
-             outputs = self.backbone(input_ids=x.long())
+            outputs = self.backbone(input_ids=x.long())
 
         features = F.relu(outputs.logits)
         probs = torch.softmax(self.head(features), dim=-1)
         return probs
 
+
 class Agent_PayloadGen(BaseExpert):  # noqa: N801
     """
     Expert 4: Real RAG Payload Generator
     """
+
     def __init__(self, observation_dim: int, action_dim: int, model_name: str = "t5-small", hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="PayloadGen", hidden_dim=hidden_dim)
 
@@ -74,9 +84,11 @@ class Agent_PayloadGen(BaseExpert):  # noqa: N801
             print(f"Failed to load PayloadGen: {e}")
             self.model = None
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         if self.model is None:
-            return torch.zeros(x.size(0), 10, device=x.device) # Dummy output
+            return torch.zeros(x.size(0), 10, device=x.device)  # Dummy output
 
         # Project observation to soft prompt embeddings
         soft_prompt = self.context_encoder(x).unsqueeze(1)
@@ -102,16 +114,25 @@ class Agent_PayloadGen(BaseExpert):  # noqa: N801
         if not docs:
             return "NO_EXPLOIT_FOUND"
 
-        metadata = docs[0].get('metadata', {})
-        template = metadata.get('code', "NO_CODE_IN_METADATA")
+        metadata = docs[0].get("metadata", {})
+        template = metadata.get("code", "NO_CODE_IN_METADATA")
 
         return template
+
 
 class Agent_Mutator(BaseExpert):  # noqa: N801
     """
     Expert 5: WAF Bypass Mutator
     """
-    def __init__(self, observation_dim: int, action_dim: int, sentinel_expert: BaseExpert, generator_expert: BaseExpert, hidden_dim: int = 64):
+
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        sentinel_expert: BaseExpert,
+        generator_expert: BaseExpert,
+        hidden_dim: int = 64,
+    ):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
         self.sentinel = sentinel_expert
         self.generator = generator_expert
@@ -121,7 +142,7 @@ class Agent_Mutator(BaseExpert):  # noqa: N801
             lambda s: s.replace("SELECT", "SeLeCt"),
             lambda s: s.replace("<script>", "%3Cscript%3E"),
             lambda s: s + " --",
-            lambda s: s.replace("UNION", "/*!UNION*/")
+            lambda s: s.replace("UNION", "/*!UNION*/"),
         ]
 
     def _mutate_string(self, payload: str) -> str:
@@ -157,10 +178,16 @@ class Agent_Mutator(BaseExpert):  # noqa: N801
         for _ in range(simulations):
             node = root
             if node.children:
-                 node = max(node.children, key=lambda c: c.value / (c.visits + 1e-6) + 2.0 * math.sqrt(math.log(root.visits + 1) / (c.visits + 1e-6)))
+                node = max(
+                    node.children,
+                    key=lambda c: (
+                        c.value / (c.visits + 1e-6) + 2.0 * math.sqrt(math.log(root.visits + 1) / (c.visits + 1e-6))
+                    ),
+                )
             if node.visits > 0 or not node.children:
                 self._expand(node)
-                if node.children: node = random.choice(node.children)  # noqa: E701
+                if node.children:
+                    node = random.choice(node.children)  # noqa: E701
             score = self._evaluate(node.state)
             curr = node
             while curr:
@@ -170,21 +197,23 @@ class Agent_Mutator(BaseExpert):  # noqa: N801
         best_child = max(root.children, key=lambda c: c.visits) if root.children else root
         return best_child.state
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         with torch.no_grad():
             initial_token_ids = self.generator._forward_impl(x, context, mask)
 
         # Access internals of Sentinel (assuming Agent_Sentinel type)
         sentinel_impl = cast(Agent_Sentinel, self.sentinel)
         if sentinel_impl.backbone is None:
-             return torch.zeros(x.size(0), self.action_dim, device=x.device)
+            return torch.zeros(x.size(0), self.action_dim, device=x.device)
 
         embed_layer = sentinel_impl.backbone.get_input_embeddings()
         vocab_size = sentinel_impl.backbone.config.vocab_size
 
         initial_token_ids = torch.clamp(initial_token_ids.long(), 0, vocab_size - 1)
         if initial_token_ids.shape[-1] > 512:  # noqa: PLR2004
-             initial_token_ids = initial_token_ids[:, :512]
+            initial_token_ids = initial_token_ids[:, :512]
 
         current_embeddings = embed_layer(initial_token_ids).clone().detach()
 

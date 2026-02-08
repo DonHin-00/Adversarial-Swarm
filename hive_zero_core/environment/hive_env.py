@@ -10,6 +10,7 @@ class PenTestEnv(gym.Env):
     Real-World Penetration Testing Environment.
     Connects to a local target via SSH/Nmap or simulates response based on Real Scans.
     """
+
     def __init__(self, observation_dim: int = 64, max_steps: int = 20, target_ip: str = "127.0.0.1"):
         super().__init__()
         self.observation_dim = observation_dim
@@ -41,10 +42,12 @@ class PenTestEnv(gym.Env):
         truncated = self.current_step >= self.max_steps
         return obs, reward, terminated, truncated, {}
 
+
 class HiveZeroEnv(gym.Env):
     """
     Gymnasium Wrapper for HIVE-ZERO.
     """
+
     def __init__(self, observation_dim: int = 64, max_steps: int = 100):
         super().__init__()
         self.observation_dim = observation_dim
@@ -92,7 +95,11 @@ class HiveZeroEnv(gym.Env):
 
         # Project action traces into logs
         # Just add first 64 components or fold
-        traces = action[:self.observation_dim] if action.size >= self.observation_dim else np.pad(action, (0, self.observation_dim - action.size))
+        traces = (
+            action[: self.observation_dim]
+            if action.size >= self.observation_dim
+            else np.pad(action, (0, self.observation_dim - action.size))
+        )
         obs += traces * 0.1
 
         terminated = self.target_health <= 0

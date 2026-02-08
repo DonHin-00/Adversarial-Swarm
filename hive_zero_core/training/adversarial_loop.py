@@ -23,12 +23,21 @@ def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
     # 3. Optimizer
     params = list(hive.gating_network.parameters())
     for expert in hive.experts:
-        if hasattr(expert, 'parameters'):
-             params.extend(list(expert.parameters()))
+        if hasattr(expert, "parameters"):
+            params.extend(list(expert.parameters()))
         if expert.name == "Sentinel":
             # Sentinel is part of the 'Blue Team' logic, implicitly trained or pre-trained.
             pass
-        elif expert.name in ["Cartographer", "DeepScope", "Mimic", "Ghost", "Chronos", "PayloadGen", "Cleaner", "Stego"]:
+        elif expert.name in [
+            "Cartographer",
+            "DeepScope",
+            "Mimic",
+            "Ghost",
+            "Chronos",
+            "PayloadGen",
+            "Cleaner",
+            "Stego",
+        ]:
             params.extend(list(expert.parameters()))
 
     optimizer = optim.Adam(params, lr=0.001)
@@ -47,7 +56,7 @@ def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
             # --- Agent Decision ---
             # Forward pass to get Action Vector
             # We mock the input logs for now, assuming NmapAdapter would run here in real loop
-            mock_logs = [{'src_ip': '127.0.0.1', 'dst_ip': '127.0.0.1', 'port': 80}]
+            mock_logs = [{"src_ip": "127.0.0.1", "dst_ip": "127.0.0.1", "port": 80}]
 
             results = hive.forward(mock_logs, top_k=3)
 
@@ -62,7 +71,7 @@ def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
                     if flat.size(0) >= 128:  # noqa: PLR2004
                         action_tensor = flat[:128]
                     else:
-                        action_tensor[:flat.size(0)] = flat
+                        action_tensor[: flat.size(0)] = flat
 
             # --- Environment Interaction ---
             action_np = action_tensor.detach().cpu().numpy()

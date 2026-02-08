@@ -15,6 +15,7 @@ def mock_env():
     os.environ.clear()
     os.environ.update(original_env)
 
+
 @pytest.fixture
 def reset_logging():
     """

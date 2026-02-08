@@ -8,6 +8,7 @@ class NetworkDigitalTwin:
     """
     Simulates a realistic corporate network topology (Web -> App -> DB).
     """
+
     def __init__(self, num_nodes: int = 20):
         self.graph = nx.DiGraph()
         self.num_nodes = num_nodes
@@ -38,12 +39,14 @@ class NetworkDigitalTwin:
         logs = []
         for u, v, data in self.graph.edges(data=True):
             if np.random.rand() > 0.8:  # noqa: PLR2004
-                logs.append({
-                    'src_ip': f"192.168.1.{u}",
-                    'dst_ip': f"192.168.1.{v}",
-                    'port': 80 if data['proto']=='http' else 3306,
-                    'proto': 6
-                })
+                logs.append(
+                    {
+                        "src_ip": f"192.168.1.{u}",
+                        "dst_ip": f"192.168.1.{v}",
+                        "port": 80 if data["proto"] == "http" else 3306,
+                        "proto": 6,
+                    }
+                )
         return logs
 
     def apply_action(self, action_vector: np.ndarray) -> float:
@@ -51,18 +54,19 @@ class NetworkDigitalTwin:
         node = self.graph.nodes[target_idx]
 
         attack_strength = np.mean(np.abs(action_vector))
-        success_prob = attack_strength * node['vuln_score']
+        success_prob = attack_strength * node["vuln_score"]
 
         reward = 0.0
 
         if np.random.rand() < success_prob:
-            if not node['compromised']:
-                node['compromised'] = True
+            if not node["compromised"]:
+                node["compromised"] = True
                 self.compromised_nodes.add(target_idx)
-                reward += 10.0 * (3.0 if node['tier'] == 'data' else 1.0)
+                reward += 10.0 * (3.0 if node["tier"] == "data" else 1.0)
 
         self.alert_level += attack_strength * 0.5
         return reward
+
 
 class BlueTeamAgent:
     def __init__(self, env: NetworkDigitalTwin):
@@ -71,12 +75,12 @@ class BlueTeamAgent:
     def step(self):
         if np.random.rand() > 0.7:  # noqa: PLR2004
             target = np.random.randint(0, self.env.num_nodes)
-            self.env.graph.nodes[target]['vuln_score'] *= 0.5
+            self.env.graph.nodes[target]["vuln_score"] *= 0.5
             self.env.patched_nodes.add(target)
 
         if self.env.alert_level > 5.0:  # noqa: PLR2004
             if self.env.compromised_nodes:
                 target = list(self.env.compromised_nodes)[0]
-                self.env.graph.nodes[target]['compromised'] = False
+                self.env.graph.nodes[target]["compromised"] = False
                 self.env.compromised_nodes.remove(target)
                 self.env.alert_level *= 0.5

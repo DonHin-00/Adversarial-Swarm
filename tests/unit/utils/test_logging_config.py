@@ -30,6 +30,7 @@ def test_setup_logger_creates_handlers(reset_logging, tmp_path):
     assert log_dir.exists()
     assert (log_dir / "hive_zero.log").exists()
 
+
 def test_logger_formatting(reset_logging, caplog):
     """
     Test that the logger formats messages correctly.
@@ -47,6 +48,7 @@ def test_logger_formatting(reset_logging, caplog):
     assert record.levelname == "INFO"
     assert record.name == "format_test"
     assert record.msg == "Test message"
+
 
 def test_setup_logger_idempotency(reset_logging, tmp_path):
     """

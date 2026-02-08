@@ -9,6 +9,7 @@ class MitreKnowledgeBase:
     Interface to MITRE ATT&CK STIX Data.
     Maps Techniques to Tools, Malware, and Groups.
     """
+
     def __init__(self, stix_path: str = "enterprise-attack.json"):
         self.logger = logging.getLogger(__name__)
         try:
@@ -31,7 +32,7 @@ class MitreKnowledgeBase:
                 "name": obj.name,
                 "id": technique_id,
                 "description": obj.description,
-                "platforms": obj.x_mitre_platforms
+                "platforms": obj.x_mitre_platforms,
             }
         return {}
 
@@ -40,12 +41,12 @@ class MitreKnowledgeBase:
         Heuristic mapping of Nmap service names to ATT&CK Techniques.
         """
         mapping = {
-            "ssh": ["T1021.004"], # SSH
-            "http": ["T1190"],    # Exploit Public-Facing App
+            "ssh": ["T1021.004"],  # SSH
+            "http": ["T1190"],  # Exploit Public-Facing App
             "https": ["T1190"],
-            "smb": ["T1021.002"], # SMB/Windows Shares
-            "rdp": ["T1021.001"], # RDP
-            "ftp": ["T1210"],     # Exploit Remote Services
-            "mysql": ["T1190"],   # DB Exploitation
+            "smb": ["T1021.002"],  # SMB/Windows Shares
+            "rdp": ["T1021.001"],  # RDP
+            "ftp": ["T1210"],  # Exploit Remote Services
+            "mysql": ["T1190"],  # DB Exploitation
         }
         return mapping.get(service_name.lower(), [])

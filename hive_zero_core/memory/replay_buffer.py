@@ -27,7 +27,7 @@ class PrioritizedReplayBuffer:
         if len(self.buffer) == 0:
             return [], np.array([]), torch.tensor([])
 
-        probs = self.priorities[:len(self.buffer)] ** self.alpha
+        probs = self.priorities[: len(self.buffer)] ** self.alpha
         probs /= probs.sum()
 
         indices = np.random.choice(len(self.buffer), batch_size, p=probs)

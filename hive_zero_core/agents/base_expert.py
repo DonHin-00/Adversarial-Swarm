@@ -20,7 +20,12 @@ class BaseExpert(nn.Module, ABC):
         # Gating Logic
         self.is_active: bool = False
 
-    def forward(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: Union[torch.Tensor, HeteroData],
+        context: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         if not isinstance(x, (torch.Tensor, HeteroData)):
             self.logger.error(f"Input x must be Tensor or HeteroData, got {type(x)}")
             raise TypeError("Input x must be Tensor or HeteroData")
@@ -30,12 +35,12 @@ class BaseExpert(nn.Module, ABC):
                 batch_size = x.size(0)
                 device = x.device
             elif isinstance(x, HeteroData):
-                if 'ip' in x:
-                    batch_size = x['ip'].x.size(0)
-                    device = x['ip'].x.device
+                if "ip" in x:
+                    batch_size = x["ip"].x.size(0)
+                    device = x["ip"].x.device
                 else:
                     batch_size = 0
-                    device = torch.device('cpu')
+                    device = torch.device("cpu")
 
             return torch.zeros((batch_size, self.action_dim), device=device)
 
@@ -44,11 +49,16 @@ class BaseExpert(nn.Module, ABC):
         except Exception as e:
             self.logger.error(f"Error in {self.name} forward pass: {str(e)}")
             if isinstance(x, torch.Tensor):
-                 return torch.zeros((x.size(0), self.action_dim), device=x.device)
+                return torch.zeros((x.size(0), self.action_dim), device=x.device)
             return torch.zeros((0, self.action_dim))
 
     @abstractmethod
-    def _forward_impl(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self,
+        x: Union[torch.Tensor, HeteroData],
+        context: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         pass
 
     def log_step(self, metrics: Dict[str, Any]):

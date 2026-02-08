@@ -17,7 +17,7 @@ class TrapArsenal:
     @staticmethod
     def chaotic_dynamics(batch_size: int, dim: int, device: torch.device) -> torch.Tensor:
         """The Siren: Logistic Map Chaos Generator."""
-        r = 3.99 # Chaotic regime
+        r = 3.99  # Chaotic regime
         x = torch.rand(batch_size, dim, device=device)
         # Iterate map
         for _ in range(5):
@@ -40,8 +40,8 @@ class TrapArsenal:
         b = 3
         # Sum of non-differentiable cosines
         for n in range(5):
-            y += (a ** n) * torch.cos((b ** n) * math.pi * x)
-        return y * 10.0 # High magnitude to disrupt grads
+            y += (a**n) * torch.cos((b**n) * math.pi * x)
+        return y * 10.0  # High magnitude to disrupt grads
 
     @staticmethod
     def resource_nova(batch_size: int, dim: int, device: torch.device) -> torch.Tensor:
@@ -57,17 +57,19 @@ class TrapArsenal:
     # ... (Conceptually 15+ more variations: Spectral, Null-Pointer, Race-Condition Simulators, etc.)
     # For brevity in prototype, we mix these base primitives to create 20 unique signatures.
 
+
 class Agent_Tarpit(BaseExpert):  # noqa: N801
     """
     Expert 11: The Symbiotic Hunter-Trap.
     Deploys a 'Maximum View' arsenal of 20+ traps simultaneously.
     """
+
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128):
         # Action dim should ideally be large to represent 'all ports' or complex payloads
         super().__init__(observation_dim, action_dim, name="Tarpit", hidden_dim=hidden_dim)
 
         self.num_traps = 20
-        self.trap_dim = action_dim # Dimensions per trap vector
+        self.trap_dim = action_dim  # Dimensions per trap vector
 
         # Fusion Layer: Mixes the 20+ traps into the final output tensor
         self.fusion = nn.Linear(self.num_traps * action_dim, action_dim)
@@ -75,7 +77,9 @@ class Agent_Tarpit(BaseExpert):  # noqa: N801
         # Learnable 'Trap Selector' weights (soft attention)
         self.attention = nn.Linear(observation_dim, self.num_traps)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Input: Global Observation (Maximum View).
         Output: Multi-vector hostile environment tensor.
@@ -90,7 +94,7 @@ class Agent_Tarpit(BaseExpert):  # noqa: N801
         # Trap 1-5: Chaos Variants
         for i in range(5):
             base = TrapArsenal.chaotic_dynamics(batch_size, self.action_dim, device)
-            traps.append(base * (i + 1)) # Scale variance
+            traps.append(base * (i + 1))  # Scale variance
 
         # Trap 6-10: Fractal Variants
         for i in range(5):
@@ -113,7 +117,7 @@ class Agent_Tarpit(BaseExpert):  # noqa: N801
 
         # 2. Maximum View Attention
         # Use global state 'x' to decide which traps are most relevant, but we use ALL of them.
-        attn_weights = F.softmax(self.attention(x), dim=-1).unsqueeze(-1) # [Batch, Num_Traps, 1]
+        attn_weights = F.softmax(self.attention(x), dim=-1).unsqueeze(-1)  # [Batch, Num_Traps, 1]
 
         # Weighted Traps (Soft Selection)
         # We don't just pick one; we weight them. But user said "Fill all ports".
@@ -122,7 +126,7 @@ class Agent_Tarpit(BaseExpert):  # noqa: N801
         # Hardening: Boost weights to ensure "regret" (minimum activity threshold)
         attn_weights = torch.clamp(attn_weights, min=0.1)
 
-        weighted_traps = trap_stack * attn_weights # [Batch, 20, Dim]
+        weighted_traps = trap_stack * attn_weights  # [Batch, 20, Dim]
 
         # 3. Fusion / Symbiosis
         # Flatten [Batch, 20*Dim]
@@ -138,6 +142,6 @@ class Agent_Tarpit(BaseExpert):  # noqa: N801
 
         # Explicit check to ensure output is not zero (for pre-commit verification)
         if output.abs().sum() == 0:
-             output = torch.randn(batch_size, self.action_dim, device=device)
+            output = torch.randn(batch_size, self.action_dim, device=device)
 
         return output

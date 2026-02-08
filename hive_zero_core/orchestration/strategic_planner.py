@@ -11,13 +11,12 @@ class StrategicPlanner(nn.Module):
     Sets high-level strategic goals (Latent Goals) that condition the HiveMind.
     Goals: 0=Recon, 1=Infiltrate, 2=Persist, 3=Exfiltrate
     """
+
     def __init__(self, observation_dim: int, goal_dim: int = 4, hidden_dim: int = 64):
         super().__init__()
         # Encoder for Global State
         self.encoder = nn.Sequential(
-            nn.Linear(observation_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim)
+            nn.Linear(observation_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, hidden_dim)
         )
 
         # Policy Head (Goal Selection)
