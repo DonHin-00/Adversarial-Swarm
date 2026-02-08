@@ -1,15 +1,39 @@
-from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks, Request
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
 import torch
 import uvicorn
 import asyncio
 import json
+from pathlib import Path
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.orchestration.strategic_planner import StrategicPlanner
 from hive_zero_core.orchestration.safety_monitor import SafetyMonitor
+from hive_zero_core.utils.logging_config import setup_logger
 
-app = FastAPI(title="HIVE-ZERO C2 Interface")
+logger = setup_logger("API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("\n" + "="*50)
+    print(" 🎨 HIVE-ZERO API Initialized")
+    print(" 📊 Dashboard: http://localhost:8000/dashboard")
+    print(" 📚 API Docs:  http://localhost:8000/docs")
+    print("="*50 + "\n")
+    logger.info("System startup complete.")
+    yield
+    # Shutdown
+    logger.info("System shutdown initiated.")
+
+app = FastAPI(
+    title="HIVE-ZERO C2 Interface",
+    description="Command & Control Interface for the HIVE-ZERO Adversarial Swarm.",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 hive = HiveMind(observation_dim=64)
 planner = StrategicPlanner(observation_dim=64)
@@ -19,15 +43,45 @@ is_paused = False
 active_websockets: List[WebSocket] = []
 
 class LogEntry(BaseModel):
-    src_ip: str
-    dst_ip: str
-    port: int
-    proto: int
-    src_port: Optional[int] = 0
+    src_ip: str = Field(..., description="Source IP address", examples=["192.168.1.5"])
+    dst_ip: str = Field(..., description="Destination IP address", examples=["10.0.0.1"])
+    port: int = Field(..., description="Target port number", examples=[80])
+    proto: int = Field(..., description="Protocol ID (e.g., 6 for TCP)", examples=[6])
+    src_port: Optional[int] = Field(0, description="Source port number")
 
 class CommandRequest(BaseModel):
-    logs: List[LogEntry]
-    top_k: int = 3
+    logs: List[LogEntry] = Field(..., description="List of network logs to analyze")
+    top_k: int = Field(3, description="Number of experts to activate", ge=1, le=10)
+    dry_run: bool = Field(False, description="If True, simulate execution without taking action")
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": exc.status_code, "message": exc.detail}},
+    )
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/dashboard")
+
+@app.get("/health", tags=["System"], summary="Get System Health")
+async def health_check():
+    """Returns the current operational status of the HiveMind."""
+    return {
+        "status": "operational",
+        "version": "1.0.0",
+        "active_experts": len(hive.experts),
+        "paused": is_paused
+    }
+
+@app.get("/dashboard", tags=["UI"], summary="Web Dashboard", response_class=HTMLResponse)
+async def dashboard():
+    """Serves the HIVE-ZERO Web Dashboard."""
+    template_path = Path(__file__).parent / "templates" / "index.html"
+    if not template_path.exists():
+        return HTMLResponse(content="<h1>Dashboard Template Not Found</h1>", status_code=500)
+    return HTMLResponse(content=template_path.read_text())
 
 @app.websocket("/ws/monitor")
 async def websocket_monitor(websocket: WebSocket):
@@ -46,22 +100,36 @@ async def broadcast_status(data: Dict):
         except:
             pass
 
-@app.get("/graph/viz")
+@app.get("/graph/viz", tags=["Visualization"], summary="Get Graph Data")
 def get_graph_viz():
-    # Return last processed graph structure
-    # We need access to the data object or store it in hive.
-    # Assuming hive.log_encoder stores maps from last update.
-    # But we need 'data' object.
-    # Ideally store last_data in hive state.
+    """Returns the current knowledge graph for Cytoscape.js visualization."""
     if hasattr(hive, 'last_data'):
         return hive.log_encoder.to_cytoscape_json(hive.last_data)
     return {"nodes": [], "edges": []}
 
-@app.post("/execute")
+@app.post("/execute", tags=["Control"], summary="Execute Swarm Strategy")
 async def execute_swarm(request: CommandRequest):
+    """
+    Analyzes logs and executes the optimal adversarial strategy.
+
+    - **logs**: List of network events
+    - **top_k**: Number of experts to involve
+    - **dry_run**: Simulation mode
+    """
     global is_paused
     if is_paused:
         return {"status": "paused"}
+
+    if request.dry_run:
+        logger.info("Executing DRY RUN simulation.")
+        await broadcast_status({"type": "info", "message": "Dry Run: Simulation started"})
+        # Simulate processing delay
+        await asyncio.sleep(0.5)
+        return {
+            "status": "dry_run",
+            "strategy": "simulation",
+            "actions": {"simulated_expert": "would_execute_attack"}
+        }
 
     raw_logs = [log.model_dump() for log in request.logs]
 
@@ -81,6 +149,7 @@ async def execute_swarm(request: CommandRequest):
         safe, reason = monitor.check_safety(global_state, torch.zeros(1, 128), 0.0)
         if not safe:
             await broadcast_status({"type": "alert", "message": f"Safety Violation: {reason}"})
+            logger.warning(f"Safety violation: {reason}")
             return {"status": "blocked", "reason": reason}
 
         results = hive.forward(raw_logs, top_k=request.top_k)
@@ -98,12 +167,15 @@ async def execute_swarm(request: CommandRequest):
             "experts_active": list(formatted_results.keys())
         })
 
+        logger.info(f"Execution complete. Strategy: {current_goal}")
+
         return {
             "strategy": current_goal,
             "actions": formatted_results
         }
 
     except Exception as e:
+        logger.error(f"Execution error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def start_server():

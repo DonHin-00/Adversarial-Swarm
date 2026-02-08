@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HIVE-ZERO Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            900: '#111827',
+                            800: '#1f2937',
+                            700: '#374151',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-mono h-screen flex flex-col overflow-hidden" x-data="dashboard()">
+
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center shadow-md z-10">
+        <div class="flex items-center space-x-3">
+            <div class="w-3 h-3 rounded-full animate-pulse"
+                 :class="connected ? 'bg-green-500' : 'bg-red-500'"></div>
+            <h1 class="text-xl font-bold tracking-wider text-green-400">HIVE-ZERO <span class="text-gray-500 text-sm">v1.0</span></h1>
+        </div>
+        <div class="flex items-center space-x-4 text-sm text-gray-400">
+            <div class="flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                <span>Active Experts: <span x-text="activeExperts.length">0</span></span>
+            </div>
+            <a href="/docs" target="_blank" class="hover:text-green-400 transition-colors">API Docs &rarr;</a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden">
+
+        <!-- Left Panel: Stats & Controls -->
+        <aside class="w-1/4 bg-gray-800 border-r border-gray-700 p-6 flex flex-col space-y-6 overflow-y-auto">
+
+            <!-- System Status -->
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-700">
+                <h2 class="text-sm font-semibold text-gray-400 uppercase mb-3">System Status</h2>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500">Connection</span>
+                        <span class="px-2 py-0.5 rounded text-xs font-medium"
+                              :class="connected ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'"
+                              x-text="connected ? 'ONLINE' : 'OFFLINE'"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500">Last Goal</span>
+                        <span class="text-blue-400 font-bold" x-text="lastGoal !== null ? lastGoal : '-'"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Experts -->
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-700 flex-1">
+                <h2 class="text-sm font-semibold text-gray-400 uppercase mb-3">Active Experts</h2>
+                <template x-if="activeExperts.length === 0">
+                    <div class="text-gray-600 text-sm italic text-center py-4">No active experts</div>
+                </template>
+                <ul class="space-y-2">
+                    <template x-for="expert in activeExperts" :key="expert">
+                        <li class="flex items-center space-x-2 text-sm text-green-300 bg-green-900/20 px-2 py-1.5 rounded border border-green-900/50">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span x-text="expert"></span>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+
+        </aside>
+
+        <!-- Right Panel: Live Logs -->
+        <section class="flex-1 bg-gray-900 p-6 flex flex-col overflow-hidden relative">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-300 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                    Live Operations Log
+                </h2>
+                <button @click="logs = []" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Clear Logs</button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto space-y-2 font-mono text-sm pb-10 pr-2 scrollbar-hide" id="log-container">
+                <template x-for="(log, index) in logs" :key="index">
+                    <div class="p-3 rounded border-l-4 transition-all duration-300 ease-in-out hover:bg-gray-800"
+                         :class="{
+                            'border-green-500 bg-green-900/10': log.type === 'execution',
+                            'border-red-500 bg-red-900/10': log.type === 'alert',
+                            'border-blue-500 bg-blue-900/10': log.type === 'info' || !log.type
+                         }">
+                        <div class="flex justify-between items-start">
+                            <span class="font-bold uppercase tracking-wide text-xs opacity-75"
+                                  :class="{
+                                    'text-green-400': log.type === 'execution',
+                                    'text-red-400': log.type === 'alert',
+                                    'text-blue-400': log.type === 'info' || !log.type
+                                  }" x-text="log.type || 'INFO'"></span>
+                            <span class="text-xs text-gray-600" x-text="log.timestamp"></span>
+                        </div>
+                        <div class="mt-1 text-gray-300 break-all" x-text="log.message || JSON.stringify(log)"></div>
+
+                        <!-- Details for Execution -->
+                        <template x-if="log.experts_active">
+                            <div class="mt-2 text-xs text-gray-500">
+                                Experts: <span class="text-gray-400" x-text="log.experts_active.join(', ')"></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-if="logs.length === 0">
+                    <div class="text-center py-20 text-gray-700">
+                        <p class="text-lg">Waiting for incoming signals...</p>
+                        <p class="text-xs mt-2">Listening on ws://localhost:8000/ws/monitor</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Auto-scroll anchor -->
+            <div id="scroll-anchor"></div>
+        </section>
+    </main>
+
+    <script>
+        function dashboard() {
+            return {
+                connected: false,
+                socket: null,
+                logs: [],
+                activeExperts: [],
+                lastGoal: null,
+
+                init() {
+                    this.connect();
+                },
+
+                connect() {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/ws/monitor`;
+
+                    this.socket = new WebSocket(wsUrl);
+
+                    this.socket.onopen = () => {
+                        this.connected = true;
+                        this.addLog({ type: 'info', message: 'Connected to HIVE-ZERO Core' });
+                    };
+
+                    this.socket.onclose = () => {
+                        this.connected = false;
+                        this.addLog({ type: 'alert', message: 'Connection lost. Reconnecting in 3s...' });
+                        setTimeout(() => this.connect(), 3000);
+                    };
+
+                    this.socket.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (e) {
+                            console.error('Error parsing message:', e);
+                        }
+                    };
+                },
+
+                handleMessage(data) {
+                    this.addLog(data);
+
+                    if (data.type === 'execution') {
+                        this.lastGoal = data.goal;
+                        this.activeExperts = data.experts_active || [];
+                    }
+                },
+
+                addLog(data) {
+                    const timestamp = new Date().toLocaleTimeString();
+                    this.logs.push({ ...data, timestamp });
+
+                    // Keep log limit
+                    if (this.logs.length > 100) {
+                        this.logs.shift();
+                    }
+
+                    // Auto-scroll
+                    this.$nextTick(() => {
+                        const container = document.getElementById('log-container');
+                        container.scrollTop = container.scrollHeight;
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
