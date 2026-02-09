@@ -95,7 +95,4 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--verbose",
-    "--cov=hive_zero_core",
-    "--cov-report=term-missing",
-    "--cov-report=html",
 ]

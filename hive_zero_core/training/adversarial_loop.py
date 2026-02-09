@@ -1,9 +1,12 @@
+import logging
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import logging
+
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.training.rewards import CompositeReward
+
 
 def train_hive_mind_adversarial(num_epochs: int = 10):
     logger = logging.getLogger("HiveTraining")
@@ -43,8 +46,8 @@ def train_hive_mind_adversarial(num_epochs: int = 10):
         # --- Environment Step (Mocked) ---
         # Generate random logs to simulate observation
         mock_logs = [
-            {'src_ip': '192.168.1.1', 'dst_ip': '10.0.0.5', 'port': 80, 'proto': 6},
-            {'src_ip': '10.0.0.5', 'dst_ip': '8.8.8.8', 'port': 53, 'proto': 17}
+            {"src_ip": "192.168.1.1", "dst_ip": "10.0.0.5", "port": 80, "proto": 6},
+            {"src_ip": "10.0.0.5", "dst_ip": "8.8.8.8", "port": 53, "proto": 17},
         ]
 
         # --- Forward Pass ---
@@ -73,7 +76,7 @@ def train_hive_mind_adversarial(num_epochs: int = 10):
         if "topology" in results:
             # R_info: Entropy reduction?
             # Mock entropy calculation
-            current_entropy = 0.5 # Placeholder
+            current_entropy = 0.5  # Placeholder
             prev_entropy = 0.8
             r_info = reward_calc.calculate_info_gain_reward(prev_entropy, current_entropy)
             # Maximize reward -> Minimize -Reward
@@ -91,6 +94,7 @@ def train_hive_mind_adversarial(num_epochs: int = 10):
             logger.info(f"Epoch {epoch}: Loss {total_loss.item()}")
 
     logger.info("Training loop complete.")
+
 
 if __name__ == "__main__":
     logging.basicConfig()
