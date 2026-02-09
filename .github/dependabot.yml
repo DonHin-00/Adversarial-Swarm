@@ -1,0 +1,23 @@
+# Dependabot configuration file
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: /  # Location of package.json
+    schedule:
+      interval: "weekly"
+      time: "05:03"
+  - package-ecosystem: "pypi"
+    directory: /  # Location of requirements.txt
+    schedule:
+      interval: "weekly"
+      time: "05:03"
+  - package-ecosystem: "docker"
+    directory: /  # Location of Dockerfile
+    schedule:
+      interval: "weekly"
+      time: "05:03"
+  - package-ecosystem: "github-actions"
+    directory: /.github/  # Location of workflow files
+    schedule:
+      interval: "weekly"
+      time: "05:03"

@@ -41,42 +41,46 @@ class Agent_Flashbang(BaseExpert):
 
 class Agent_GlassHouse(BaseExpert):
     """
-    Expert 14: The Exposer.
+    Expert 14: The Exposer (Holographic Edition).
     'Total Exposure': Strips attacker defenses and opens all surfaces to the internet.
     """
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128):
         super().__init__(observation_dim, action_dim, name="GlassHouse", hidden_dim=hidden_dim)
 
-        # 1. Firewall Breaker Network
-        # Outputs signals to drop rules/flush tables
+        # 1. Firewall Breaker
         self.breaker = nn.Linear(observation_dim, hidden_dim)
 
-        # 2. Service Binder (The Opener)
-        # Maps internal services to 0.0.0.0
-        self.opener = nn.Linear(hidden_dim, action_dim)
+        # 2. Holographic Service Binder
+        # Generates complex-valued signals (Real + Imaginary) to simulate Quantum Port States
+        # Real part = Physical Binding (0.0.0.0)
+        # Imaginary part = Decoy State (Honeyport)
+        self.opener_real = nn.Linear(hidden_dim, action_dim)
+        self.opener_imag = nn.Linear(hidden_dim, action_dim)
 
         # 3. Beacon Broadcaster
-        # Amplifies the signal to be visible to scanners
         self.beacon = nn.Linear(hidden_dim, action_dim)
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Generates the 'Open All Surfaces' tensor.
+        Generates the 'Holographic Total Exposure' tensor.
         """
         # Phase 1: Break Walls
-        # Invert the safety gradients - assume 'x' contains security config
         broken = F.leaky_relu(self.breaker(x), negative_slope=0.2)
 
-        # Phase 2: Open Doors (0.0.0.0 binding)
-        # We want high positive values to represent "OPEN" state on ports
-        open_ports = torch.abs(self.opener(broken)) * 100.0
+        # Phase 2: Quantum Port Binding (Holographic)
+        real_ports = torch.abs(self.opener_real(broken)) * 100.0 # High value = OPEN
+        imag_ports = torch.sin(self.opener_imag(broken)) * 50.0  # Phase shift = TRAP
 
         # Phase 3: Shout (Beacon)
-        # Add high-frequency noise to attract attention
-        shout = self.beacon(broken) * torch.randn_like(open_ports)
+        shout = self.beacon(broken) * torch.randn_like(real_ports)
 
-        # Combine: Maximum Exposure
-        # The result is a tensor that screams "I AM OPEN"
-        total_exposure = open_ports + shout
+        # Fusion: Magnitude of the complex signal
+        # |Z| = sqrt(Real^2 + Imag^2)
+        # This creates a non-linear, high-energy exposure surface that is mathematically consistent
+        # but operationally devastating.
+        total_exposure = torch.sqrt(torch.pow(real_ports, 2) + torch.pow(imag_ports, 2) + 1e-6)
 
-        return total_exposure
+        # Add the Beacon noise
+        final_output = total_exposure + shout
+
+        return final_output
