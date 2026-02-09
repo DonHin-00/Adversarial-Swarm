@@ -294,7 +294,8 @@ Raw Logs
 ### File Path Restrictions
 Windows file systems prohibit certain characters in file names:
 - **Forbidden in filenames**: `<`, `>`, `:`, `"`, `/`, `\`, `|`, `?`, `*`
-- **Note**: `/` and `\` can only be used as path separators, not within filenames
+- **Note**: `/` and `\` are reserved as system path separators and cannot appear within filenames
+- **Important**: Never manually construct paths with separators - use `pathlib.Path` instead
 - **Recommendation**: Use alphanumeric characters, hyphens, underscores, and periods only in file names
 
 ### Best Practices
