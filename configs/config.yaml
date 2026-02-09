@@ -1,0 +1,32 @@
+defaults:
+  - _self_
+
+system:
+  observation_dim: 64
+  hidden_dim: 64
+  device: "cuda"
+
+experts:
+  recon:
+    cartographer:
+      heads: 4
+    chronos:
+      seq_len: 10
+  attack:
+    sentinel:
+      model: "prajjwal1/bert-tiny"
+    payload_gen:
+      model: "t5-small"
+  post:
+    mimic:
+      latent_dim: 16
+
+training:
+  epochs: 10
+  batch_size: 4
+  lr: 0.001
+  replay_buffer_size: 1000
+
+env:
+  max_steps: 100
+  num_nodes: 20
