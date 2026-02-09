@@ -292,17 +292,20 @@ Raw Logs
 ## Windows Compatibility Notes
 
 ### File Path Restrictions
-Windows file systems prohibit certain characters in file names:
-- **Forbidden in filenames**: `<`, `>`, `:`, `"`, `/`, `\`, `|`, `?`, `*`
-- **Note**: `/` and `\` are reserved as system path separators and cannot appear within filenames
-- **Important**: Never manually construct paths with separators - use `pathlib.Path` instead
-- **Recommendation**: Use alphanumeric characters, hyphens, underscores, and periods only in file names
+Windows file systems prohibit certain characters within filename components:
+- **Forbidden within filename components**: `<`, `>`, `:`, `"`, `|`, `?`, `*`
+- **Path separators (not allowed in filenames)**: `/` and `\` are reserved as system path separators
+- **Important**: Never manually construct paths with literal separator characters - use `pathlib.Path` instead
+- **Recommendation**: Use only alphanumeric characters, hyphens, underscores, and periods in file names
 
 ### Best Practices
 1. **Avoid Wildcards**: Never use `*` or `?` in committed file names
 2. **Test on Windows**: Run CI/CD on Windows runners
 3. **Cross-Platform Paths**: Always use `pathlib.Path` for all path operations - it handles platform-specific separators automatically
-4. **No Manual Path Separators**: Avoid manually constructing paths with `/` or `\` - use `pathlib.Path` methods like `.joinpath()` or the `/` operator
+4. **Path Construction**: Use `pathlib.Path` methods for building paths:
+   - ✓ Good: `Path('dir') / 'file'` (using Path's `/` operator)
+   - ✓ Good: `Path('dir').joinpath('file')` (using .joinpath() method)
+   - ✗ Bad: `'dir' + '/' + 'file'` (manual string concatenation with separators)
 5. **Git Line Endings**: Configure `.gitattributes` for consistent line endings
 
 ### GitHub Actions
