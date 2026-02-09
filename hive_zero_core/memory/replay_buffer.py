@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Any, Tuple, Union
 
 class PrioritizedReplayBuffer:
     """

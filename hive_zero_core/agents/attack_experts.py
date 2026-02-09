@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from typing import Optional, Dict, Union
+from typing import Optional, Dict
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
 
@@ -16,6 +16,9 @@ class SentinelAgent(BaseExpert):
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.backbone = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=hidden_dim, output_hidden_states=True)
+
+            # Projection from observation_dim to backbone's hidden size
+            self.input_projection = nn.Linear(observation_dim, self.backbone.config.hidden_size)
 
             # Ensemble Heads
             self.head1 = nn.Linear(hidden_dim, 2)
@@ -32,7 +35,9 @@ class SentinelAgent(BaseExpert):
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # x: [Batch, Seq, Dim] or [Batch, Seq]
         if x.dim() == 3 and x.shape[-1] > 1:
-             outputs = self.backbone(inputs_embeds=x)
+             # Project raw observation embeddings to backbone's hidden size
+             x_projected = self.input_projection(x)
+             outputs = self.backbone(inputs_embeds=x_projected)
         else:
              outputs = self.backbone(input_ids=x.long())
 
@@ -129,7 +134,8 @@ class MutatorAgent(BaseExpert):
         for _ in range(iterations):
             optimizer.zero_grad()
             # We want to MAXIMIZE probability of evasion (P(Allowed))
-            probs = self.sentinel(optimized_emb)
+            # Call Sentinel's ungated implementation to ensure gradients flow through it
+            probs = self.sentinel._forward_impl(optimized_emb)
             loss = -torch.log(probs[:, 1] + 1e-8).mean()
             loss.backward()
             optimizer.step()
@@ -144,7 +150,8 @@ class MutatorAgent(BaseExpert):
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # 1. Base Generation
         with torch.no_grad():
-            gen_out = self.generator(x, context)
+            # Call generator's ungated implementation to ensure it returns actual output
+            gen_out = self.generator._forward_impl(x, context)
             # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
             # gen_out shape: [Batch, Seq]
             gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
