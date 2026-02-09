@@ -292,16 +292,17 @@ Raw Logs
 ## Windows Compatibility Notes
 
 ### File Path Restrictions
-Windows file systems prohibit certain characters in file paths:
-- **Forbidden**: `*`, `?`, `<`, `>`, `|`, `:`, `"`
-- **Recommendation**: Use alphanumeric, hyphens, underscores only
-- **Path Separators**: Use forward slashes `/` or double backslashes `\\` in Python strings
+Windows file systems prohibit certain characters in file names:
+- **Forbidden in filenames**: `<`, `>`, `:`, `"`, `/`, `\`, `|`, `?`, `*`
+- **Note**: `/` and `\` can only be used as path separators, not within filenames
+- **Recommendation**: Use alphanumeric characters, hyphens, underscores, and periods only in file names
 
 ### Best Practices
 1. **Avoid Wildcards**: Never use `*` or `?` in committed file names
 2. **Test on Windows**: Run CI/CD on Windows runners
-3. **Cross-Platform Paths**: Use `pathlib.Path` for path operations
-4. **Git Line Endings**: Configure `.gitattributes` for consistent line endings
+3. **Cross-Platform Paths**: Always use `pathlib.Path` for all path operations - it handles platform-specific separators automatically
+4. **No Manual Path Separators**: Avoid manually constructing paths with `/` or `\` - use `pathlib.Path` methods like `.joinpath()` or the `/` operator
+5. **Git Line Endings**: Configure `.gitattributes` for consistent line endings
 
 ### GitHub Actions
 - Test workflows on multiple OS: `runs-on: [ubuntu-latest, windows-latest, macos-latest]`
