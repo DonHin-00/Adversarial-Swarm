@@ -134,8 +134,8 @@ class MutatorAgent(BaseExpert):
         for _ in range(iterations):
             optimizer.zero_grad()
             # We want to MAXIMIZE probability of evasion (P(Allowed))
-            # Call Sentinel's ungated implementation to ensure gradients flow through it
-            probs = self.sentinel._forward_impl(optimized_emb)
+            # Use forward_ungated to bypass gating and ensure gradients flow through Sentinel
+            probs = self.sentinel.forward_ungated(optimized_emb)
             loss = -torch.log(probs[:, 1] + 1e-8).mean()
             loss.backward()
             optimizer.step()
@@ -150,8 +150,8 @@ class MutatorAgent(BaseExpert):
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # 1. Base Generation
         with torch.no_grad():
-            # Call generator's ungated implementation to ensure it returns actual output
-            gen_out = self.generator._forward_impl(x, context)
+            # Use forward_ungated to bypass gating and ensure generator returns actual output
+            gen_out = self.generator.forward_ungated(x, context)
             # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
             # gen_out shape: [Batch, Seq]
             gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)

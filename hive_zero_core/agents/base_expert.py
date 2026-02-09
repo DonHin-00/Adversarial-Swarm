@@ -59,6 +59,13 @@ class BaseExpert(nn.Module, ABC):
                  return torch.zeros((x.size(0), self.action_dim), device=x.device)
             return torch.zeros((0, self.action_dim)) # Fallback
 
+    def forward_ungated(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Bypasses gating logic and directly calls the implementation.
+        Useful for internal dependencies between experts during optimization.
+        """
+        return self._forward_impl(x, context, mask)
+
     @abstractmethod
     def _forward_impl(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor], mask: Optional[torch.Tensor]) -> torch.Tensor:
         pass

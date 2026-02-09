@@ -41,6 +41,9 @@ class HeteroLogEncoder(nn.Module):
     def update(self, logs: List[Dict]) -> HeteroData:
         data = HeteroData()
 
+        # Get device once for reuse
+        device = next(self.parameters()).device
+
         # Lists for edges
         ip_src_indices = []
         ip_dst_indices = []
@@ -95,15 +98,12 @@ class HeteroLogEncoder(nn.Module):
             ip_features.append(self._ip_to_tensor(ip))
 
         if ip_features:
-            device = next(self.parameters()).device
             x_ip = self.ip_encoder(torch.stack(ip_features).to(device))
         else:
-            device = next(self.parameters()).device
             x_ip = torch.zeros(0, self.node_embed_dim, device=device)
 
         # Port Nodes
         sorted_ports = sorted(local_port_map.items(), key=lambda x: x[1])
-        device = next(self.parameters()).device
         port_indices = torch.tensor([p for p, _ in sorted_ports], dtype=torch.long, device=device)
         if len(port_indices) > 0:
             x_port = self.port_encoder(port_indices)

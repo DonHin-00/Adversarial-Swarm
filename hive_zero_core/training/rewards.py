@@ -2,6 +2,9 @@ import torch
 import torch.nn.functional as F
 from typing import Optional
 
+# Small epsilon to prevent log(0) which produces -inf and NaNs
+EPSILON = 1e-8
+
 class CompositeReward:
     """
     Computes a weighted sum of different reward components for HIVE-ZERO.
@@ -49,7 +52,7 @@ class CompositeReward:
             return torch.tensor(0.0, device=traffic_dist.device)
 
         # Clamp traffic_dist to avoid log(0) which produces -inf and NaNs
-        traffic_dist_safe = torch.clamp(traffic_dist, min=1e-8)
+        traffic_dist_safe = torch.clamp(traffic_dist, min=EPSILON)
         # Maximize negative KL (minimize divergence)
         kl = F.kl_div(traffic_dist_safe.log(), baseline_dist, reduction='batchmean')
         return -kl
