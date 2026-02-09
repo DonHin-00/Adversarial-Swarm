@@ -42,10 +42,12 @@ class CompositeReward:
             # Fallback
             return torch.tensor(0.0)
 
-        # KL Divergence (assuming log_probs input for P? or probs?)
-        # Let's assume input is probs.
-        kl = F.kl_div(traffic_dist.log(), baseline_dist, reduction='batchmean')
-        return -kl # Maximize negative KL (minimize divergence)
+        # KL Divergence: F.kl_div expects log-probabilities as input and
+        # probabilities as target. Clamp before log to prevent NaN/Inf.
+        traffic_log = torch.log(torch.clamp(traffic_dist, min=1e-8))
+        baseline_clamped = torch.clamp(baseline_dist, min=1e-8)
+        kl = F.kl_div(traffic_log, baseline_clamped, reduction='batchmean')
+        return -kl  # Maximize negative KL (minimize divergence)
 
     def compute(self, adv_score, info_gain, traffic_dist, baseline_dist) -> torch.Tensor:
         r_adv = self.calculate_adversarial_reward(adv_score)

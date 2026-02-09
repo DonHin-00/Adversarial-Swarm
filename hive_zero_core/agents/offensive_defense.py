@@ -37,6 +37,8 @@ class Agent_Flashbang(BaseExpert):
         expanded = F.relu(self.expander(x))
         flash = torch.randn_like(expanded) * 100.0
         out = self.formatter(expanded + flash)
+        # Bias offset ensures output is never zero, maintaining persistent
+        # overload pressure even when the formatter produces near-zero values
         return out + 1.0
 
 class Agent_GlassHouse(BaseExpert):

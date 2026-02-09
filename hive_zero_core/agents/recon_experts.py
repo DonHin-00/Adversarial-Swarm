@@ -51,12 +51,11 @@ class Agent_DeepScope(BaseExpert):
 
         if mask is not None:
             # Hard Masking: -1e9 for invalid actions
-            # Ensure mask matches logits shape or broadcasts
-            if mask.shape != logits.shape:
-                # Simple check, real implementation would handle broadcasting carefully
-                # If logits is [batch, action_dim] and mask is [batch, action_dim] -> OK
-                # If mask is [action_dim] -> OK
-                pass
+            # Broadcast mask to match logits shape if needed
+            if mask.dim() == 1 and logits.dim() == 2:
+                mask = mask.unsqueeze(0).expand_as(logits)
+            elif mask.shape != logits.shape:
+                mask = mask.expand_as(logits)
 
             # (1 - mask) * large_negative + mask * logits
             # Assuming mask is 1 for valid, 0 for invalid

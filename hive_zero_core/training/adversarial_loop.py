@@ -61,20 +61,22 @@ def train_hive_mind_adversarial(num_epochs: int = 10):
         # Adversarial Component
         if "defense_score" in results:
             # Score is P(Allowed)
-            score = results["defense_score"]
+            score = results["defense_score"].to(device)
             # We want to MAXIMIZE score. Loss = -Score
             loss_adv = -torch.mean(score)
             total_loss = total_loss + loss_adv
 
         if "optimized_payload" in results:
-            # Maybe auxiliary loss?
-            pass
+            # Auxiliary loss: encourage diversity in payload embeddings
+            payload = results["optimized_payload"].to(device)
+            diversity_loss = -torch.std(payload)
+            total_loss = total_loss + 0.01 * diversity_loss
 
         if "topology" in results:
-            # R_info: Entropy reduction?
-            # Mock entropy calculation
-            current_entropy = 0.5 # Placeholder
-            prev_entropy = 0.8
+            # R_info: Entropy reduction
+            topology = results["topology"].to(device)
+            current_entropy = float(torch.mean(torch.abs(topology)).item())
+            prev_entropy = 0.8  # Placeholder baseline
             r_info = reward_calc.calculate_info_gain_reward(prev_entropy, current_entropy)
             # Maximize reward -> Minimize -Reward
             total_loss = total_loss - r_info
