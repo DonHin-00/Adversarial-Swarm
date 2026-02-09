@@ -15,6 +15,10 @@ class SentinelAgent(BaseExpert):
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            # Ensure tokenizer has a pad token
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+                
             self.backbone = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=hidden_dim, output_hidden_states=True)
 
             # Ensemble Heads
@@ -62,6 +66,10 @@ class PayloadGenAgent(BaseExpert):
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            # Ensure tokenizer has a pad token
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
             self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
             # Vector DB (Keys: Embeddings, Values: Template Tokens)
@@ -143,19 +151,24 @@ class MutatorAgent(BaseExpert):
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # 1. Base Generation
-        with torch.no_grad():
-            gen_out = self.generator(x, context)
-            # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
-            # gen_out shape: [Batch, Seq]
-            gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
-            # Re-encode for Sentinel (BERT)
-            sentinel_inputs = self.sentinel.tokenizer(gen_text, return_tensors="pt", padding=True, truncation=True).to(x.device)
-            initial_token_ids = sentinel_inputs["input_ids"]
+        try:
+            with torch.no_grad():
+                gen_out = self.generator(x, context)
+                # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
+                # gen_out shape: [Batch, Seq]
+                gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
+                # Re-encode for Sentinel (BERT)
+                sentinel_inputs = self.sentinel.tokenizer(gen_text, return_tensors="pt", padding=True, truncation=True, max_length=512).to(x.device)
+                initial_token_ids = sentinel_inputs["input_ids"]
 
-        embed_layer = self.sentinel.backbone.get_input_embeddings()
-        current_embeddings = embed_layer(initial_token_ids).detach()
+            embed_layer = self.sentinel.backbone.get_input_embeddings()
+            current_embeddings = embed_layer(initial_token_ids).detach()
 
-        # 2. Inference-Time Search
-        if current_embeddings.size(0) == 1:
-            return self._inner_loop_search(current_embeddings)
-        return current_embeddings
+            # 2. Inference-Time Search
+            if current_embeddings.size(0) == 1:
+                return self._inner_loop_search(current_embeddings)
+            return current_embeddings
+        except Exception as e:
+            self.logger.error(f"MutatorAgent forward failed: {str(e)}")
+            # Return zero embeddings as fallback
+            return torch.zeros(x.size(0), 1, self.hidden_dim, device=x.device)

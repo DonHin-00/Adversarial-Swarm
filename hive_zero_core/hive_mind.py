@@ -117,13 +117,25 @@ class HiveMind(nn.Module):
 
         Args:
             raw_logs: List of log dictionaries (e.g., {'src_ip': ..., 'port': ...}).
-            top_k: Number of experts to activate.
+            top_k: Number of experts to activate. Must be between 1 and num_experts.
 
         Returns:
             A HiveResults dictionary containing outputs from active agents.
         """
+        # Validate inputs
+        if not raw_logs:
+            self.logger.warning("Empty raw_logs provided, returning empty results")
+            return {"gating_weights": torch.zeros(1, len(self.experts))}
+        
+        # Validate top_k
+        top_k = max(1, min(top_k, len(self.experts)))
+        
         # 1. Encode
-        data = self.log_encoder.update(raw_logs)
+        try:
+            data = self.log_encoder.update(raw_logs)
+        except Exception as e:
+            self.logger.error(f"Failed to encode logs: {e}")
+            return {"gating_weights": torch.zeros(1, len(self.experts))}
 
         # Global State Embedding from HeteroData
         # Aggregate IP nodes?
