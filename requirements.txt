@@ -1,7 +1,7 @@
 # Adversarial Swarm - Production Dependencies
 
 # Core Framework
-python>=3.10
+# Python >=3.10 required (see pyproject.toml or setup.py)
 
 # Machine Learning & AI
 torch>=2.0.0
