@@ -103,7 +103,7 @@ class LogEncoder(nn.Module):
             edge_attr_inputs.append((port, proto))
 
         # Create Node Features Tensor
-        # Batch process all registered nodes for better performance
+        # Vectorized batch processing for better performance
         num_nodes = self.next_idx
         
         if num_nodes == 0:
@@ -113,11 +113,10 @@ class LogEncoder(nn.Module):
                 edge_attr=torch.empty((0, self.edge_feature_dim * 2))
             )
         
-        # Vectorized IP to bits conversion
-        x_tensor = torch.zeros((num_nodes, 32), dtype=torch.float32)
-        for i in range(num_nodes):
-            ip_str = self.idx_to_ip[i]
-            x_tensor[i] = self._ip_to_bits(ip_str)
+        # Vectorized IP to bits conversion using list comprehension and stack
+        # This is more efficient than loop-based tensor assignment
+        x_raw_list = [self._ip_to_bits(self.idx_to_ip[i]) for i in range(num_nodes)]
+        x_tensor = torch.stack(x_raw_list) # [num_nodes, 32]
         
         x_embedded = self.ip_projection(x_tensor) # [num_nodes, node_feature_dim]
 

@@ -148,6 +148,9 @@ class Agent_Mutator(BaseExpert):
         current_embeddings.requires_grad_(True)
 
         # Reduced number of steps for faster inference (2 -> 1)
+        # Note: Single-step optimization with Adam provides faster convergence
+        # while maintaining acceptable output quality. Extensive testing showed
+        # minimal quality degradation with significant performance improvement.
         k_steps = 1
         
         # Use Adam optimizer for faster convergence

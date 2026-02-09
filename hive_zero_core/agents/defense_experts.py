@@ -79,10 +79,12 @@ class Agent_Tarpit(BaseExpert):
     def _generate_trap_templates(self, batch_size: int, device: torch.device) -> torch.Tensor:
         """
         Generate trap templates with caching for improved performance.
-        Only regenerates if batch size changes.
+        Only regenerates if batch size or device changes.
         """
-        if self._trap_cache is not None and self._cache_batch_size == batch_size:
-            return self._trap_cache.to(device)
+        if (self._trap_cache is not None and 
+            self._cache_batch_size == batch_size and 
+            self._trap_cache.device == device):
+            return self._trap_cache
         
         traps = []
         
@@ -110,7 +112,7 @@ class Agent_Tarpit(BaseExpert):
         # Stack: [Batch, Num_Traps, Action_Dim]
         trap_stack = torch.stack(traps, dim=1)
         
-        # Cache for reuse
+        # Cache for reuse (keep on same device to avoid unnecessary copies)
         self._trap_cache = trap_stack.detach()
         self._cache_batch_size = batch_size
         
