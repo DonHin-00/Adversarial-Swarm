@@ -124,8 +124,14 @@ class LogEncoder(nn.Module):
         edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long)
 
         # Create Edge Attributes Tensor
-        ports = torch.tensor([attr[0] for attr in edge_attr_inputs], dtype=torch.long)
-        protos = torch.tensor([attr[1] for attr in edge_attr_inputs], dtype=torch.long)
+        ports = torch.clamp(
+            torch.tensor([attr[0] for attr in edge_attr_inputs], dtype=torch.long),
+            0, 65535,
+        )
+        protos = torch.clamp(
+            torch.tensor([attr[1] for attr in edge_attr_inputs], dtype=torch.long),
+            0, 255,
+        )
 
         port_embeds = self.port_embedding(ports) # [num_edges, edge_feature_dim]
         proto_embeds = self.proto_embedding(protos) # [num_edges, edge_feature_dim]

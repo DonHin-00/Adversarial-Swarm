@@ -12,20 +12,68 @@ from hive_zero_core.agents.defense_experts import Agent_Tarpit
 from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
 
 class GatingNetwork(nn.Module):
-    def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64):
+    """
+    Sparse Mixture-of-Experts gating network.
+
+    Maps a global state embedding to expert selection weights via a learned
+    two-layer MLP. During training, Gaussian noise is injected into logits
+    to encourage exploration across experts, and a load-balancing auxiliary
+    loss penalises routing collapse onto a single expert.
+    """
+
+    def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64,
+                 noise_std: float = 0.1):
         super().__init__()
+        self.num_experts = num_experts
+        self.noise_std = noise_std
+
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
+            nn.Dropout(p=0.05),
             nn.Linear(hidden_dim, num_experts)
         )
 
+        # Running estimate of expert utilisation for load balancing
+        self.register_buffer(
+            "_expert_counts",
+            torch.zeros(num_experts, dtype=torch.float32),
+        )
+        self._total_routes: int = 0
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: Global state/context embedding
+        """
+        Args:
+            x: Global state embedding [batch, input_dim].
+
+        Returns:
+            Normalised expert weights [batch, num_experts].
+        """
         logits = self.net(x)
-        # Softmax for weights
+
+        # Exploration noise during training
+        if self.training and self.noise_std > 0:
+            logits = logits + torch.randn_like(logits) * self.noise_std
+
         weights = F.softmax(logits, dim=-1)
         return weights
+
+    def load_balance_loss(self, weights: torch.Tensor) -> torch.Tensor:
+        """
+        Auxiliary loss that penalises uneven expert utilisation.
+
+        Computes the coefficient of variation of mean routing weights across
+        experts. A perfectly balanced router yields CV ≈ 0.
+
+        Args:
+            weights: Expert weights [batch, num_experts] from the last forward.
+
+        Returns:
+            Scalar loss tensor.
+        """
+        mean_weights = weights.mean(dim=0)  # [num_experts]
+        cv = mean_weights.std() / (mean_weights.mean() + 1e-8)
+        return cv
 
 class HiveMind(nn.Module):
     def __init__(self, observation_dim: int = 64, pretrained: bool = False):
