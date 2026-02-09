@@ -127,8 +127,11 @@ class HiveMind(nn.Module):
             self.logger.warning("Empty raw_logs provided, returning empty results")
             return {"gating_weights": torch.zeros(1, len(self.experts))}
         
-        # Validate top_k
+        # Validate and clamp top_k to valid range
+        original_top_k = top_k
         top_k = max(1, min(top_k, len(self.experts)))
+        if top_k != original_top_k:
+            self.logger.warning(f"top_k clamped from {original_top_k} to {top_k}")
         
         # 1. Encode
         try:

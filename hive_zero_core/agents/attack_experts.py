@@ -157,6 +157,8 @@ class MutatorAgent(BaseExpert):
     Implements Inference-Time Search using gradient descent + noise injection.
     Optimizes payloads to evade SentinelAgent.
     """
+    MAX_SEQUENCE_LENGTH = 512  # Maximum sequence length for tokenization
+    
     def __init__(self, observation_dim: int, action_dim: int, sentinel_expert: BaseExpert, generator_expert: BaseExpert, hidden_dim: int = 64):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
         self.sentinel = sentinel_expert
@@ -208,7 +210,13 @@ class MutatorAgent(BaseExpert):
                 # gen_out shape: [Batch, Seq]
                 gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
                 # Re-encode for Sentinel (BERT)
-                sentinel_inputs = self.sentinel.tokenizer(gen_text, return_tensors="pt", padding=True, truncation=True, max_length=512).to(x.device)
+                sentinel_inputs = self.sentinel.tokenizer(
+                    gen_text, 
+                    return_tensors="pt", 
+                    padding=True, 
+                    truncation=True, 
+                    max_length=self.MAX_SEQUENCE_LENGTH
+                ).to(x.device)
                 initial_token_ids = sentinel_inputs["input_ids"]
 
             embed_layer = self.sentinel.backbone.get_input_embeddings()

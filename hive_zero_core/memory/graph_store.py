@@ -43,8 +43,8 @@ class HeteroLogEncoder(nn.Module):
             ip_int = int(ipaddress.IPv4Address(ip_str))
             bits = [float(x) for x in format(ip_int, '032b')]
             return torch.tensor(bits, dtype=torch.float32)
-        except (ValueError, ipaddress.AddressValueError) as e:
-            # Log warning for debugging but don't crash
+        except (ValueError, ipaddress.AddressValueError):
+            # Return zero tensor for invalid IP addresses
             return torch.zeros(32, dtype=torch.float32)
 
     def update(self, logs: List[Dict]) -> HeteroData:

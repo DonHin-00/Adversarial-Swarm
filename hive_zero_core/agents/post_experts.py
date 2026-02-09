@@ -135,7 +135,7 @@ class StegoAgent(BaseExpert):
                 return stego_img.unsqueeze(1)
             except Exception as e:
                 # Fallback: return cover image unchanged if steganography fails
-                self.logger.error(f"Steganography failed: {e}, returning cover unchanged")
+                self.logger.error(f"Steganography failed ({type(e).__name__}): {e}, returning cover unchanged")
                 return context
 
         return encoded_msg
