@@ -101,25 +101,42 @@ class HiveMind(nn.Module):
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
         """
         Main Forward Pass with fixed Quad-Strike Logic.
+
+        Args:
+            raw_logs: List of dicts with keys 'src_ip', 'dst_ip', 'port', 'proto'.
+            top_k: Number of top experts to activate per forward pass.
+
+        Returns:
+            Dictionary mapping result names to output tensors.
         """
+        if not isinstance(raw_logs, list):
+            raise TypeError(f"raw_logs must be a list, got {type(raw_logs)}")
+
         data = self.log_encoder.update(raw_logs)
 
         if data.x.size(0) > 0:
             global_state = torch.mean(data.x, dim=0, keepdim=True)
         else:
-            global_state = torch.zeros(1, self.observation_dim)
+            global_state = torch.zeros(1, self.observation_dim, device=data.x.device)
 
         weights = self.gating_network(global_state)
 
-        top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
+        # Clamp top_k to number of experts to prevent out-of-bounds
+        num_experts = weights.shape[-1]
+        effective_k = max(1, min(top_k, num_experts))
+        top_k_vals, top_k_indices = torch.topk(weights, k=effective_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 
-        # SYNERGY LOGIC: Force-Enable Kill Chain
-        tarpit_idx = 10
-        if tarpit_idx in active_indices:
-            if 11 not in active_indices: active_indices.append(11) # Feedback
-            if 12 not in active_indices: active_indices.append(12) # Flashbang
-            if 13 not in active_indices: active_indices.append(13) # GlassHouse
+        # SYNERGY LOGIC: Force-Enable Kill Chain using name-based lookup
+        # instead of hardcoded indices to prevent breakage if expert order changes
+        tarpit_active = any(
+            self.experts[idx].name == "Tarpit" for idx in active_indices
+        )
+        if tarpit_active:
+            synergy_names = {"FeedbackLoop", "Flashbang", "GlassHouse"}
+            for i, expert in enumerate(self.experts):
+                if expert.name in synergy_names and i not in active_indices:
+                    active_indices.append(i)
 
         results = {}
 
@@ -142,7 +159,7 @@ class HiveMind(nn.Module):
                     results["constraints"] = out
 
                 elif expert.name == "Chronos":
-                    dummy_times = torch.randn(1, 10)
+                    dummy_times = torch.randn(1, 10, device=global_state.device)
                     out = expert(dummy_times)
                     results["timing"] = out
 
@@ -167,7 +184,7 @@ class HiveMind(nn.Module):
                     results["hiding_spot"] = out
 
                 elif expert.name == "Stego":
-                    dummy_data = torch.rand(1, self.observation_dim)
+                    dummy_data = torch.rand(1, self.observation_dim, device=global_state.device)
                     out = expert(dummy_data)
                     results["covert_channel"] = out
 
