@@ -125,6 +125,7 @@ class PayloadGenAgent(BaseExpert):
         return templates
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        retrieved_tokens = None  # Initialize to avoid UnboundLocalError
         try:
             # 1. RAG Retrieval
             query = self.query_proj(x)
@@ -148,8 +149,12 @@ class PayloadGenAgent(BaseExpert):
             return outputs
         except Exception as e:
             self.logger.error(f"PayloadGen forward failed: {str(e)}")
-            # Return retrieved tokens as fallback
-            return retrieved_tokens.long()
+            # Return retrieved tokens as fallback if available, otherwise zeros
+            if retrieved_tokens is not None:
+                return retrieved_tokens.long()
+            else:
+                # Fallback to zeros if retrieval failed
+                return torch.zeros(x.size(0), 20, dtype=torch.long, device=x.device)
 
 class MutatorAgent(BaseExpert):
     """

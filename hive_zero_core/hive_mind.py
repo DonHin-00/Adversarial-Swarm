@@ -125,7 +125,8 @@ class HiveMind(nn.Module):
         # Validate inputs
         if not raw_logs:
             self.logger.warning("Empty raw_logs provided, returning empty results")
-            return {"gating_weights": torch.zeros(1, len(self.experts))}
+            device = next(self.parameters()).device
+            return {"gating_weights": torch.zeros(1, len(self.experts), device=device)}
         
         # Validate and clamp top_k to valid range
         original_top_k = top_k
@@ -138,7 +139,8 @@ class HiveMind(nn.Module):
             data = self.log_encoder.update(raw_logs)
         except Exception as e:
             self.logger.error(f"Failed to encode logs: {e}")
-            return {"gating_weights": torch.zeros(1, len(self.experts))}
+            device = next(self.parameters()).device
+            return {"gating_weights": torch.zeros(1, len(self.experts), device=device)}
 
         # Global State Embedding from HeteroData
         # Aggregate IP nodes?
