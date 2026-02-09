@@ -172,6 +172,12 @@ class HiveMind(nn.Module):
         self.logger.info("Instincts injected: Bias towards Active Defense established.")
         self.knowledge_loader = KnowledgeLoader(self.observation_dim, self.observation_dim)
 
+    def compute_global_state(self, data) -> torch.Tensor:
+        """Compute the mean-pooled global state from a PyG Data object."""
+        if data.x.size(0) > 0:
+            return torch.mean(data.x, dim=0, keepdim=True)
+        return torch.zeros(1, self.observation_dim, device=data.x.device)
+
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
         """
         Main Forward Pass with fixed Quad-Strike Logic.
@@ -187,11 +193,7 @@ class HiveMind(nn.Module):
             raise TypeError(f"raw_logs must be a list, got {type(raw_logs)}")
 
         data = self.log_encoder.update(raw_logs)
-
-        if data.x.size(0) > 0:
-            global_state = torch.mean(data.x, dim=0, keepdim=True)
-        else:
-            global_state = torch.zeros(1, self.observation_dim, device=data.x.device)
+        global_state = self.compute_global_state(data)
 
         weights = self.gating_network(global_state)
 

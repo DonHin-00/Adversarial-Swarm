@@ -99,7 +99,7 @@ class Agent_WAF(BaseExpert):
         # Scaled dot-product similarity against signature bank
         # [B, H] × [H, S] → [B, S]
         sim = torch.matmul(features, self.signature_bank.t())
-        sim = sim / (self.hidden_dim ** 0.5)
+        sim = sim / (self.signature_bank.size(1) ** 0.5)
 
         # Weighted rule-stack scoring
         weighted_sim = sim * F.softmax(self.rule_weights, dim=0)

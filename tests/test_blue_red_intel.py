@@ -248,6 +248,7 @@ class TestThreatIntelDB:
         nearest signature towards that embedding."""
         from hive_zero_core.memory.threat_intel_db import ThreatIntelDB
 
+        torch.manual_seed(42)
         db = ThreatIntelDB(embedding_dim=16, bank_size=4, ema_decay=0.9,
                            novelty_threshold=0.5)
         target = torch.ones(1, 16) * 5.0
@@ -263,6 +264,7 @@ class TestThreatIntelDB:
         """Very similar embeddings should EMA-merge rather than fill the bank."""
         from hive_zero_core.memory.threat_intel_db import ThreatIntelDB
 
+        torch.manual_seed(42)
         db = ThreatIntelDB(embedding_dim=16, bank_size=8, novelty_threshold=0.05)
         base = torch.randn(1, 16)
 

@@ -239,7 +239,7 @@ class ThreatIntelDB(nn.Module):
         b_norm = F.normalize(bank, dim=-1)         # [S, D]
 
         sim = torch.matmul(q_norm, b_norm.t())     # [B, S]
-        effective_k = min(top_k, bank.size(0))
+        effective_k = max(1, min(top_k, bank.size(0)))
         top_sim, top_idx = torch.topk(sim, k=effective_k, dim=-1)
 
         # Gather signatures

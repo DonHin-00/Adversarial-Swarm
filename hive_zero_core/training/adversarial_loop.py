@@ -127,9 +127,7 @@ def train_hive_mind_adversarial(
         # Gating load-balance
         with torch.no_grad():
             data = hive.log_encoder.update(mock_logs)
-            gs = (torch.mean(data.x, dim=0, keepdim=True)
-                  if data.x.size(0) > 0
-                  else torch.zeros(1, observation_dim, device=data.x.device))
+            gs = hive.compute_global_state(data)
         weights = hive.gating_network(gs)
         red_loss = red_loss + balance_weight * hive.gating_network.load_balance_loss(weights)
 

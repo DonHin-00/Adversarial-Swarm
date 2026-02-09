@@ -132,6 +132,9 @@ class Agent_Tarpit(BaseExpert):
         for i in range(4):
             traps.append(TrapArsenal.temporal_jitter(batch_size, dim, device) * (1 + i))
 
+        assert len(traps) >= self.num_traps, (
+            f"Generated {len(traps)} traps but need {self.num_traps}"
+        )
         return torch.stack(traps[:self.num_traps], dim=1)  # [B, T, D]
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
