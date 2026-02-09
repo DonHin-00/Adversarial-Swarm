@@ -1,3 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
 # Node.js
 node_modules/
 npm-debug.log*
@@ -17,7 +33,18 @@ build/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
