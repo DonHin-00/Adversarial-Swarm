@@ -34,26 +34,37 @@ class SentinelAgent(BaseExpert):
             raise RuntimeError(f"Sentinel initialization failed: {str(e)}")
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # x: [Batch, Seq, Dim] or [Batch, Seq]
-        if x.dim() == 3 and x.shape[-1] > 1:
-             outputs = self.backbone(inputs_embeds=x)
-        else:
-             outputs = self.backbone(input_ids=x.long())
+        try:
+            # x: [Batch, Seq, Dim] or [Batch, Seq]
+            if x.dim() == 3 and x.shape[-1] > 1:
+                outputs = self.backbone(inputs_embeds=x)
+            else:
+                # Ensure x is long type and within valid token range
+                x_long = x.long()
+                # Clamp to valid token ID range for the model
+                vocab_size = self.backbone.config.vocab_size
+                x_long = torch.clamp(x_long, 0, vocab_size - 1)
+                outputs = self.backbone(input_ids=x_long)
 
-        features = F.relu(outputs.logits) # [Batch, hidden_dim]
+            features = F.relu(outputs.logits) # [Batch, hidden_dim]
 
-        # Stateful refinement
-        h_seq = features.unsqueeze(1)
-        h_out, _ = self.history_gru(h_seq)
-        refined_features = h_out.squeeze(1)
+            # Stateful refinement
+            h_seq = features.unsqueeze(1)
+            h_out, _ = self.history_gru(h_seq)
+            refined_features = h_out.squeeze(1)
 
-        # Ensemble Voting
-        logits1 = self.head1(refined_features)
-        logits2 = self.head2(refined_features)
-        logits3 = self.head3(refined_features)
+            # Ensemble Voting
+            logits1 = self.head1(refined_features)
+            logits2 = self.head2(refined_features)
+            logits3 = self.head3(refined_features)
 
-        avg_probs = (torch.softmax(logits1, -1) + torch.softmax(logits2, -1) + torch.softmax(logits3, -1)) / 3.0
-        return avg_probs
+            avg_probs = (torch.softmax(logits1, -1) + torch.softmax(logits2, -1) + torch.softmax(logits3, -1)) / 3.0
+            return avg_probs
+        except Exception as e:
+            self.logger.error(f"Sentinel forward failed: {str(e)}")
+            # Return neutral probabilities as fallback
+            batch_size = x.size(0)
+            return torch.ones(batch_size, 2, device=x.device) * 0.5
 
 class PayloadGenAgent(BaseExpert):
     """
@@ -88,35 +99,57 @@ class PayloadGenAgent(BaseExpert):
             raise RuntimeError(f"PayloadGen initialization failed: {str(e)}")
 
     def _retrieve(self, query: torch.Tensor) -> torch.Tensor:
+        """Retrieve templates from the vector database based on query similarity.
+        
+        Args:
+            query: Query embeddings [B, 64]
+            
+        Returns:
+            Retrieved template token IDs [B, 20]
+        """
         # query: [B, 64]
+        if query.size(-1) != self.db_keys.size(-1):
+            self.logger.warning(f"Query dim {query.size(-1)} != DB key dim {self.db_keys.size(-1)}, resizing")
+            # Pad or truncate query to match DB key dimension
+            if query.size(-1) < self.db_keys.size(-1):
+                query = F.pad(query, (0, self.db_keys.size(-1) - query.size(-1)))
+            else:
+                query = query[:, :self.db_keys.size(-1)]
+        
         scores = torch.matmul(query, self.db_keys.t())
         indices = torch.argmax(scores, dim=1) # [B]
 
-        # Retrieve templates
+        # Retrieve templates with bounds checking
+        indices = torch.clamp(indices, 0, self.db_values.size(0) - 1)
         templates = self.db_values[indices] # [B, 20]
         return templates
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # 1. RAG Retrieval
-        query = self.query_proj(x)
-        retrieved_tokens = self._retrieve(query)
+        try:
+            # 1. RAG Retrieval
+            query = self.query_proj(x)
+            retrieved_tokens = self._retrieve(query)
 
-        # 2. Generation with Context
-        # Using mock encoder outputs to condition generation
-        # We simulate this by passing retrieval embedding as 'encoder_outputs'
+            # 2. Generation with Context
+            # Using mock encoder outputs to condition generation
+            # We simulate this by passing retrieval embedding as 'encoder_outputs'
 
-        # Embed retrieval
-        # T5 encoder expects input_ids.
-        # We need to run the full encoder stack to get valid encoder_outputs
-        encoder_out = self.model.encoder(input_ids=retrieved_tokens.long())
+            # Embed retrieval
+            # T5 encoder expects input_ids.
+            # We need to run the full encoder stack to get valid encoder_outputs
+            encoder_out = self.model.encoder(input_ids=retrieved_tokens.long())
 
-        # Generate
-        outputs = self.model.generate(
-            encoder_outputs=encoder_out,
-            max_length=64
-        )
+            # Generate
+            outputs = self.model.generate(
+                encoder_outputs=encoder_out,
+                max_length=64
+            )
 
-        return outputs
+            return outputs
+        except Exception as e:
+            self.logger.error(f"PayloadGen forward failed: {str(e)}")
+            # Return retrieved tokens as fallback
+            return retrieved_tokens.long()
 
 class MutatorAgent(BaseExpert):
     """
@@ -130,24 +163,41 @@ class MutatorAgent(BaseExpert):
         self.generator = generator_expert
 
     def _inner_loop_search(self, embedding: torch.Tensor, iterations: int = 5) -> torch.Tensor:
-        # embedding: [1, seq, dim]
-        optimized_emb = embedding.clone().detach().requires_grad_(True)
-        optimizer = optim.SGD([optimized_emb], lr=0.01)
+        """Perform inference-time search to optimize embedding for evasion.
+        
+        Args:
+            embedding: Input embedding to optimize [1, seq, dim]
+            iterations: Number of optimization iterations
+            
+        Returns:
+            Optimized embedding
+        """
+        try:
+            # embedding: [1, seq, dim]
+            optimized_emb = embedding.clone().detach().requires_grad_(True)
+            optimizer = optim.SGD([optimized_emb], lr=0.01)
 
-        for _ in range(iterations):
-            optimizer.zero_grad()
-            # We want to MAXIMIZE probability of evasion (P(Allowed))
-            probs = self.sentinel(optimized_emb)
-            loss = -torch.log(probs[:, 1] + 1e-8).mean()
-            loss.backward()
-            optimizer.step()
+            for _ in range(iterations):
+                optimizer.zero_grad()
+                # We want to MAXIMIZE probability of evasion (P(Allowed))
+                probs = self.sentinel(optimized_emb)
+                # Ensure probs has the expected shape [batch, 2]
+                if probs.size(-1) != 2:
+                    self.logger.warning(f"Unexpected probs shape: {probs.shape}, expected [..., 2]")
+                    break
+                loss = -torch.log(probs[:, 1] + 1e-8).mean()
+                loss.backward()
+                optimizer.step()
 
-            # Discrete Noise Injection (Hybrid)
-            with torch.no_grad():
-                noise = torch.randn_like(optimized_emb) * 0.05
-                optimized_emb.add_(noise)
+                # Discrete Noise Injection (Hybrid)
+                with torch.no_grad():
+                    noise = torch.randn_like(optimized_emb) * 0.05
+                    optimized_emb.add_(noise)
 
-        return optimized_emb.detach()
+            return optimized_emb.detach()
+        except Exception as e:
+            self.logger.error(f"Inner loop search failed: {str(e)}")
+            return embedding.detach()
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # 1. Base Generation
