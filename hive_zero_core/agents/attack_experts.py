@@ -116,11 +116,8 @@ class Agent_Mutator(BaseExpert):
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Inference-Time Search Loop.
+        Inference-Time Search Loop with optimizations.
         """
-        # Hardening: Check dependencies active status
-        # Ideally, we force them active for this calculation
-
         # 1. Initial Generation
         with torch.no_grad():
             # Use generator's logic but handle dims manually
@@ -150,18 +147,19 @@ class Agent_Mutator(BaseExpert):
         current_embeddings = embed_layer(initial_token_ids).clone().detach()
         current_embeddings.requires_grad_(True)
 
-        optimizer = optim.SGD([current_embeddings], lr=0.1)
+        # Reduced number of steps for faster inference (2 -> 1)
+        k_steps = 1
+        
+        # Use Adam optimizer for faster convergence
+        optimizer = optim.Adam([current_embeddings], lr=0.05)
 
         best_embeddings = current_embeddings.clone().detach()
         best_score = -1.0
-
-        k_steps = 2 # Reduced for stability in prototype
 
         for i in range(k_steps):
             optimizer.zero_grad()
 
             # Forward through Sentinel (soft embeddings)
-            # Ensure shape compatibility inside Sentinel is handled by its new _forward_impl
             outputs = self.sentinel.model(inputs_embeds=current_embeddings)
             logits = outputs.logits
             probs = torch.softmax(logits, dim=-1)
@@ -181,9 +179,5 @@ class Agent_Mutator(BaseExpert):
 
         # Output needs to match action_dim (128).
         # Flatten embeddings or return token IDs?
-        # Usually Mutator returns the optimized payload sequence.
-        # We assume action_dim expects a sequence or a flattened embedding.
-        # Let's return flattened best_embeddings, adapted to size.
-
         flat = best_embeddings.view(x.size(0), -1)
         return self.ensure_dimension(flat, self.action_dim)

@@ -127,71 +127,72 @@ class HiveMind(nn.Module):
         for expert in self.experts:
             expert.is_active = False
 
-        # Execute Active Experts
+        # Execute Active Experts using index-based dispatch for better performance
         for idx in active_indices:
             expert = self.experts[idx]
             expert.is_active = True
 
             try:
-                if expert.name == "Cartographer":
+                # Index-based expert execution (more efficient than string comparison)
+                if idx == 0:  # Cartographer
                     out = expert(data.x, context=data.edge_index)
                     results["topology"] = out
 
-                elif expert.name == "DeepScope":
+                elif idx == 1:  # DeepScope
                     out = expert(global_state, mask=None)
                     results["constraints"] = out
 
-                elif expert.name == "Chronos":
+                elif idx == 2:  # Chronos
                     dummy_times = torch.randn(1, 10)
                     out = expert(dummy_times)
                     results["timing"] = out
 
-                elif expert.name == "PayloadGen":
+                elif idx == 3:  # PayloadGen
                     out = expert(global_state)
                     results["raw_payload"] = out
 
-                elif expert.name == "Mutator":
+                elif idx == 4:  # Mutator
                     out = expert(global_state)
                     results["optimized_payload"] = out
 
-                elif expert.name == "Sentinel":
+                elif idx == 5:  # Sentinel
                     out = expert(global_state.unsqueeze(1))
                     results["defense_score"] = out
 
-                elif expert.name == "Mimic":
+                elif idx == 6:  # Mimic
                     out = expert(global_state)
                     results["traffic_shape"] = out
 
-                elif expert.name == "Ghost":
+                elif idx == 7:  # Ghost
                     out = expert(global_state)
                     results["hiding_spot"] = out
 
-                elif expert.name == "Stego":
+                elif idx == 8:  # Stego
                     dummy_data = torch.rand(1, self.observation_dim)
                     out = expert(dummy_data)
                     results["covert_channel"] = out
 
-                elif expert.name == "Cleaner":
+                elif idx == 9:  # Cleaner
                     out = expert(global_state)
                     results["cleanup"] = out
 
-                elif expert.name == "Tarpit":
+                elif idx == 10:  # Tarpit
                     out = expert(global_state)
                     results["active_defense"] = out
 
-                elif expert.name == "FeedbackLoop":
+                elif idx == 11:  # FeedbackLoop
                     out = expert(global_state)
                     results["counter_strike"] = out
 
-                elif expert.name == "Flashbang":
+                elif idx == 12:  # Flashbang
                     out = expert(global_state)
                     results["overload"] = out
 
-                elif expert.name == "GlassHouse":
+                elif idx == 13:  # GlassHouse
                     out = expert(global_state)
                     results["total_exposure"] = out
 
             except Exception as e:
-                self.logger.error(f"Execution failed for {expert.name}: {e}")
+                self.logger.error(f"Execution failed for expert {idx}: {e}")
 
         return results

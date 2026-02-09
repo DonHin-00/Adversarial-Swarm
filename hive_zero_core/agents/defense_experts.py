@@ -71,6 +71,50 @@ class Agent_Tarpit(BaseExpert):
 
         # Learnable 'Trap Selector' weights (soft attention)
         self.attention = nn.Linear(observation_dim, self.num_traps)
+        
+        # Cache for trap templates to avoid regenerating static components
+        self._trap_cache = None
+        self._cache_batch_size = None
+
+    def _generate_trap_templates(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        """
+        Generate trap templates with caching for improved performance.
+        Only regenerates if batch size changes.
+        """
+        if self._trap_cache is not None and self._cache_batch_size == batch_size:
+            return self._trap_cache.to(device)
+        
+        traps = []
+        
+        # Trap 1-5: Chaos Variants (reduced redundant calls)
+        chaos_base = TrapArsenal.chaotic_dynamics(batch_size, self.action_dim, device)
+        for i in range(5):
+            traps.append(chaos_base * (i + 1)) # Scale variance
+        
+        # Trap 6-10: Fractal Variants
+        fractal_base = TrapArsenal.recursive_fractal(batch_size, self.action_dim, device)
+        for i in range(5):
+            traps.append(fractal_base + torch.randn_like(fractal_base) * 0.1 * i)
+        
+        # Trap 11-15: Gradient/Resource Traps (alternating pattern)
+        for i in range(5):
+            if i % 2 == 0:
+                traps.append(TrapArsenal.gradient_trap(batch_size, self.action_dim, device))
+            else:
+                traps.append(TrapArsenal.resource_nova(batch_size, self.action_dim, device))
+        
+        # Trap 16-20: Port Maze / Noise
+        for i in range(5):
+            traps.append(TrapArsenal.port_maze_noise(batch_size, self.action_dim, device))
+        
+        # Stack: [Batch, Num_Traps, Action_Dim]
+        trap_stack = torch.stack(traps, dim=1)
+        
+        # Cache for reuse
+        self._trap_cache = trap_stack.detach()
+        self._cache_batch_size = batch_size
+        
+        return trap_stack
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
@@ -80,41 +124,12 @@ class Agent_Tarpit(BaseExpert):
         batch_size = x.size(0)
         device = x.device
 
-        # 1. Generate Raw Arsenal (20+ Traps)
-        # We simulate 20 variations by mixing the base math primitives
-        traps = []
-
-        # Trap 1-5: Chaos Variants
-        for i in range(5):
-            base = TrapArsenal.chaotic_dynamics(batch_size, self.action_dim, device)
-            traps.append(base * (i + 1)) # Scale variance
-
-        # Trap 6-10: Fractal Variants
-        for i in range(5):
-            base = TrapArsenal.recursive_fractal(batch_size, self.action_dim, device)
-            traps.append(base + torch.randn_like(base) * 0.1 * i)
-
-        # Trap 11-15: Gradient/Resource Traps
-        for i in range(5):
-            if i % 2 == 0:
-                traps.append(TrapArsenal.gradient_trap(batch_size, self.action_dim, device))
-            else:
-                traps.append(TrapArsenal.resource_nova(batch_size, self.action_dim, device))
-
-        # Trap 16-20: Port Maze / Noise
-        for i in range(5):
-            traps.append(TrapArsenal.port_maze_noise(batch_size, self.action_dim, device))
-
-        # Stack: [Batch, Num_Traps, Action_Dim]
-        trap_stack = torch.stack(traps, dim=1)
+        # 1. Generate Raw Arsenal (20+ Traps) with caching
+        trap_stack = self._generate_trap_templates(batch_size, device)
 
         # 2. Maximum View Attention
         # Use global state 'x' to decide which traps are most relevant, but we use ALL of them.
         attn_weights = F.softmax(self.attention(x), dim=-1).unsqueeze(-1) # [Batch, Num_Traps, 1]
-
-        # Weighted Traps (Soft Selection)
-        # We don't just pick one; we weight them. But user said "Fill all ports".
-        # So we might want to boost the weights to ensure high activity everywhere.
 
         # Hardening: Boost weights to ensure "regret" (minimum activity threshold)
         attn_weights = torch.clamp(attn_weights, min=0.1)

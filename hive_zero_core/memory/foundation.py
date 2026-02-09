@@ -15,33 +15,32 @@ class SyntheticExperienceGenerator:
     def generate_batch(self, batch_size: int = 1000) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Returns a batch of (obs, action, reward, next_obs, done)
-        simulating perfect behavior.
+        simulating perfect behavior. Optimized for better performance.
         """
+        # Calculate batch sizes efficiently
+        idle_size = batch_size // 3
+        scan_size = batch_size // 3
+        attack_size = batch_size - idle_size - scan_size
+        
         # 1. Observations: Simulate diversified network traffic
-        # We use a mixture of Gaussians to simulate different "clusters" of activity (Scan, Attack, Idle)
-
+        # Vectorized generation for better performance
+        
         # Cluster 1: Idle / Noise (Low Magnitude)
-        idle_obs = torch.randn(batch_size // 3, self.obs_dim) * 0.1
+        idle_obs = torch.randn(idle_size, self.obs_dim) * 0.1
 
         # Cluster 2: Recon Scan (Structured Spikes)
-        scan_obs = torch.randn(batch_size // 3, self.obs_dim) * 0.5
+        scan_obs = torch.randn(scan_size, self.obs_dim) * 0.5
         scan_obs[:, :10] += 2.0 # High signals in first 10 dims (Simulating Ports)
 
         # Cluster 3: Active Attack (High Magnitude, Complex)
-        attack_obs = torch.randn(batch_size - (2 * (batch_size // 3)), self.obs_dim)
-        attack_obs = torch.abs(attack_obs) * 2.0 # Strong signals
+        attack_obs = torch.abs(torch.randn(attack_size, self.obs_dim)) * 2.0 # Strong signals
 
         obs = torch.cat([idle_obs, scan_obs, attack_obs], dim=0)
         # Shuffle
         idx = torch.randperm(batch_size)
         obs = obs[idx]
 
-        # 2. Optimal Actions (Instincts)
-        # We assume for "Knowledge" that we want to react aggressively to attacks and efficiently to scans.
-
-        # Heuristic: If Obs magnitude > 1.0 -> High Intensity Defense (Tarpit/GlassHouse)
-        # If Obs magnitude < 0.5 -> Recon (Cartographer)
-
+        # 2. Optimal Actions (Instincts) - vectorized computation
         obs_mag = obs.mean(dim=1, keepdim=True)
         actions = torch.zeros(batch_size, self.act_dim)
 
@@ -49,12 +48,13 @@ class SyntheticExperienceGenerator:
         high_mask = (obs_mag > 0.5).float()
         actions += high_mask * torch.randn(batch_size, self.act_dim) * 5.0
 
-        # Low Intensity -> Generate "Map" patterns (Structured)
+        # Low Intensity -> Generate "Map" patterns (Structured) - optimized
         low_mask = (1.0 - high_mask)
-        actions += low_mask * torch.sin(torch.linspace(0, 10, self.act_dim).unsqueeze(0))
+        pattern = torch.sin(torch.linspace(0, 10, self.act_dim))
+        actions += low_mask * pattern.unsqueeze(0)
 
         # 3. Rewards: High rewards for this synthetic data (it represents "Winning")
-        rewards = torch.ones(batch_size, 1) * 10.0 # Mastery level reward
+        rewards = torch.full((batch_size, 1), 10.0) # More efficient than ones * 10.0
 
         # 4. Next Obs (State Transitions)
         # Assume successful mitigation reduces threat (next state is calmer)
