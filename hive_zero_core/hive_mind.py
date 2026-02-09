@@ -5,11 +5,14 @@ from typing import List, Dict, Optional, Tuple, Any
 from hive_zero_core.utils.logging_config import setup_logger
 from hive_zero_core.memory.graph_store import LogEncoder
 from hive_zero_core.memory.foundation import KnowledgeLoader, WeightInitializer
+from hive_zero_core.memory.threat_intel_db import ThreatIntelDB
 from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
 from hive_zero_core.agents.defense_experts import Agent_Tarpit
 from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
+from hive_zero_core.agents.blue_team import Agent_WAF, Agent_EDR, Agent_SIEM, Agent_IDS
+from hive_zero_core.agents.red_booster import Agent_PreAttackBooster
 
 class GatingNetwork(nn.Module):
     """
@@ -84,16 +87,19 @@ class HiveMind(nn.Module):
         # 1. Shared Latent Space / Data Layer
         self.log_encoder = LogEncoder(node_feature_dim=observation_dim)
 
-        # 2. The 14 Experts (Cluster A, B, C + Active Defense + Kill Chain)
+        # 2. Evolving Threat Intelligence Database
+        self.threat_intel = ThreatIntelDB(embedding_dim=observation_dim)
+
+        # 3. Expert Clusters (18 experts total)
 
         # Cluster A: Recon
         self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)
-        self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10) # 10 discrete actions?
-        self.expert_chronos = Agent_Chronos(1, action_dim=1) # Time input
+        self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10)
+        self.expert_chronos = Agent_Chronos(1, action_dim=1)
 
         # Cluster B: Attack
         self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
-        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128) # Seq len
+        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)
         self.expert_mutator = Agent_Mutator(observation_dim, action_dim=128,
                                            sentinel_expert=self.expert_sentinel,
                                            generator_expert=self.expert_payloadgen)
@@ -112,28 +118,48 @@ class HiveMind(nn.Module):
         self.expert_flashbang = Agent_Flashbang(observation_dim, action_dim=observation_dim)
         self.expert_glasshouse = Agent_GlassHouse(observation_dim, action_dim=observation_dim)
 
-        # Order matters for indexing in GatingNetwork outputs
-        self.experts = nn.ModuleList([
-            self.expert_cartographer, # 0
-            self.expert_deepscope,    # 1
-            self.expert_chronos,      # 2
-            self.expert_payloadgen,   # 3
-            self.expert_mutator,      # 4
-            self.expert_sentinel,     # 5
-            self.expert_mimic,        # 6
-            self.expert_ghost,        # 7
-            self.expert_stego,        # 8
-            self.expert_cleaner,      # 9
-            self.expert_tarpit,       # 10
-            self.expert_feedback,     # 11
-            self.expert_flashbang,    # 12
-            self.expert_glasshouse    # 13
+        # Cluster F: Blue Team Detection Stack
+        self.expert_waf = Agent_WAF(observation_dim, action_dim=2)
+        self.expert_edr = Agent_EDR(observation_dim, action_dim=2)
+        self.expert_siem = Agent_SIEM(observation_dim, action_dim=2)
+        self.expert_ids = Agent_IDS(observation_dim, action_dim=2)
+
+        # Cluster G: Red Team Pre-Attack Booster
+        self.expert_booster = Agent_PreAttackBooster(
+            observation_dim, action_dim=observation_dim
+        )
+        # Wire the booster to the blue team so it can adversarially refine
+        self.expert_booster.register_blue_team([
+            self.expert_waf, self.expert_edr, self.expert_siem, self.expert_ids,
         ])
 
-        # 3. Gating Mechanism
+        # Order matters for indexing in GatingNetwork outputs
+        self.experts = nn.ModuleList([
+            self.expert_cartographer,  # 0   Recon
+            self.expert_deepscope,     # 1   Recon
+            self.expert_chronos,       # 2   Recon
+            self.expert_payloadgen,    # 3   Attack
+            self.expert_mutator,       # 4   Attack
+            self.expert_sentinel,      # 5   Attack
+            self.expert_mimic,         # 6   Post-Exploit
+            self.expert_ghost,         # 7   Post-Exploit
+            self.expert_stego,         # 8   Post-Exploit
+            self.expert_cleaner,       # 9   Post-Exploit
+            self.expert_tarpit,        # 10  Active Defense
+            self.expert_feedback,      # 11  Kill Chain
+            self.expert_flashbang,     # 12  Kill Chain
+            self.expert_glasshouse,    # 13  Kill Chain
+            self.expert_waf,           # 14  Blue Team
+            self.expert_edr,           # 15  Blue Team
+            self.expert_siem,          # 16  Blue Team
+            self.expert_ids,           # 17  Blue Team
+            self.expert_booster,       # 18  Red Booster
+        ])
+
+        # 4. Gating Mechanism
         self.gating_network = GatingNetwork(observation_dim, num_experts=len(self.experts))
 
-        # 4. Foundation / Knowledge Bootstrap
+        # 5. Foundation / Knowledge Bootstrap
         if pretrained:
             self.bootstrap_knowledge()
 
@@ -256,7 +282,94 @@ class HiveMind(nn.Module):
                     out = expert(global_state)
                     results["total_exposure"] = out
 
+                # --- Blue Team Detection Stack ---
+                elif expert.name == "WAF":
+                    out = expert(global_state)
+                    results["waf_verdict"] = out
+
+                elif expert.name == "EDR":
+                    out = expert(global_state)
+                    results["edr_verdict"] = out
+
+                elif expert.name == "SIEM":
+                    out = expert(global_state)
+                    results["siem_verdict"] = out
+
+                elif expert.name == "IDS":
+                    out = expert(global_state)
+                    results["ids_verdict"] = out
+
+                # --- Red Team Pre-Attack Booster ---
+                elif expert.name == "PreAttackBooster":
+                    # Feed the best available payload through the booster
+                    payload = results.get(
+                        "optimized_payload",
+                        results.get("raw_payload", global_state),
+                    )
+                    payload_input = self.expert_booster.ensure_dimension(
+                        payload, self.observation_dim
+                    )
+                    out = expert(payload_input)
+                    results["hardened_payload"] = out
+
             except Exception as e:
                 self.logger.error(f"Execution failed for {expert.name}: {e}")
 
         return results
+
+    # ------------------------------------------------------------------
+    # Co-Evolutionary Threat Intelligence
+    # ------------------------------------------------------------------
+
+    @torch.no_grad()
+    def evolve_threat_intel(self, results: Dict[str, Any]):
+        """
+        Feed forward-pass results into the ThreatIntelDB to drive
+        red/blue co-evolution.
+
+        The database records:
+        * **successful evasions** — payloads that the blue-team stack
+          scored as "Allowed" (attack bank, for red-team imitation).
+        * **caught payloads** — payloads that triggered at least one
+          detector (defense bank, for blue-team pattern learning).
+
+        Should be called after every ``forward()`` during training.
+        """
+        # Determine the best available payload embedding
+        payload = results.get(
+            "hardened_payload",
+            results.get("optimized_payload",
+                        results.get("raw_payload")),
+        )
+        if payload is None:
+            return
+
+        payload_flat = payload.view(payload.size(0), -1)
+        payload_flat = self.expert_booster.ensure_dimension(
+            payload_flat, self.observation_dim
+        )
+
+        # Aggregate blue-team verdicts (P(Blocked) from each detector)
+        blue_keys = ("waf_verdict", "edr_verdict", "siem_verdict", "ids_verdict")
+        block_probs = []
+        for key in blue_keys:
+            if key in results:
+                logits = results[key]
+                probs = F.softmax(logits, dim=-1)
+                block_probs.append(probs[:, 0])  # P(Blocked) is index 0
+
+        if not block_probs:
+            return
+
+        # A payload is "caught" if ANY detector gives P(Blocked) > 0.5
+        max_block = torch.stack(block_probs, dim=0).max(dim=0).values  # [B]
+        evaded = max_block < 0.5
+        caught = ~evaded
+
+        if evaded.any():
+            self.threat_intel.record_attack_success(payload_flat[evaded])
+        if caught.any():
+            self.threat_intel.record_attack_failure(payload_flat[caught])
+
+        evasion_rate = float(evaded.float().mean().item())
+        self.threat_intel.step_generation(evasion_rate)
