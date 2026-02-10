@@ -1,0 +1,15 @@
+[pylint]
+max-line-length=100
+
+[MESSAGES CONTROL]
+disable=
+    C0111,  # missing-docstring
+    C0103,  # invalid-name
+    R0913,  # too-many-arguments
+    R0914,  # too-many-locals
+    R0902,  # too-many-instance-attributes
+    R0912,  # too-many-branches
+    R0915,  # too-many-statements
+
+[FORMAT]
+indent-string='    '

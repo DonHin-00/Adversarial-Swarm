@@ -1,9 +1,12 @@
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional, Any, Tuple
-from abc import ABC, abstractmethod
+
 from hive_zero_core.utils.logging_config import setup_logger
+
 
 class BaseExpert(nn.Module, ABC):
     """
@@ -76,7 +79,9 @@ class BaseExpert(nn.Module, ABC):
             return torch.zeros((x.size(0), self.action_dim), device=x.device)
 
     @abstractmethod
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor]) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor]
+    ) -> torch.Tensor:
         pass
 
     def log_step(self, metrics: Dict[str, Any]):

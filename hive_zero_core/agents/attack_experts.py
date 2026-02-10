@@ -1,9 +1,9 @@
+from typing import Optional
+
 import torch
-import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-from typing import Optional, Dict, Tuple
-from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer
+
 from hive_zero_core.agents.base_expert import BaseExpert
 
 

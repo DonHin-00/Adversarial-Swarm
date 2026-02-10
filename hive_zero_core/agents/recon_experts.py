@@ -1,9 +1,12 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATv2Conv
-from typing import Optional, Dict
+
 from hive_zero_core.agents.base_expert import BaseExpert
+
 
 class Agent_Cartographer(BaseExpert):
     """
@@ -60,6 +63,7 @@ class Agent_Cartographer(BaseExpert):
         h = h + self.res_proj2(identity2)
 
         return h
+
 
 
 class Agent_DeepScope(BaseExpert):

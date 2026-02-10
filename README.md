@@ -1,5 +1,8 @@
 # Adversarial-Swarm (HIVE-ZERO)
 
+[![Python CI](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/python-ci.yml/badge.svg)](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/python-ci.yml)
+[![Security Scan](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/security-scan.yml/badge.svg)](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/security-scan.yml)
+
 A Hierarchical Multi-Agent Reinforcement Learning (H-MARL) system implementing adversarial swarm intelligence for network security research.
 
 ## Architecture
@@ -59,17 +62,80 @@ hive_zero_core/
 │   └── threat_intel_db.py    # Evolving threat intelligence database
 ├── training/
 │   ├── adversarial_loop.py   # Red/blue adversarial co-evolution training loop
+│   ├── config.py             # Experiment configuration management
+│   ├── data_loader.py        # Dataset and data loading utilities
 │   └── rewards.py            # Composite reward (R_adv + R_info + R_stealth + R_temporal)
 └── utils/
     └── logging_config.py     # Logging configuration
 ```
 
+## Requirements
+
+- Python ≥ 3.10
+- PyTorch ≥ 2.6
+- PyTorch Geometric ≥ 2.3
+- Transformers ≥ 4.48
+- See `requirements.txt` for full list
+
 ## Installation
 
+### Quick Start
+
 ```bash
-pip install -e .
-# or
+# Clone the repository
+git clone https://github.com/DonHin-00/Adversarial-Swarm.git
+cd Adversarial-Swarm
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Install the package
+pip install -e .
+```
+
+### Development Setup
+
+```bash
+# Install with development dependencies
+pip install -e ".[dev]"
+
+# Install pre-commit hooks
+make pre-commit
+
+# Or manually:
+pip install pre-commit
+pre-commit install
+```
+
+### Using Make
+
+```bash
+# See all available commands
+make help
+
+# Common commands:
+make install        # Install production dependencies
+make install-dev    # Install development dependencies
+make test          # Run tests
+make lint          # Run linters
+make format        # Format code
+make clean         # Clean build artifacts
+```
+
+### Docker Setup
+
+```bash
+# Build the Docker image
+make docker-build
+
+# Or manually:
+docker-compose build
+
+# Run the container
+docker-compose up -d
+
+# For development:
+docker-compose run dev bash
 ```
 
 ## Usage
@@ -95,19 +161,93 @@ stats = hive.threat_intel.get_stats()
 print(f"Generation {stats['generation']}, Evasion rate: {stats['avg_evasion_rate']:.1%}")
 ```
 
-## Training
+### Training the System
+
+Train the HiveMind using adversarial learning:
 
 ```python
 from hive_zero_core.training.adversarial_loop import train_hive_mind_adversarial
+from hive_zero_core.training import get_quick_test_config
 
 # Red/blue adversarial co-evolution with ThreatIntelDB
 train_hive_mind_adversarial(num_epochs=100)
+
+# Or use a quick test config
+config = get_quick_test_config()
+trained_hive = train_hive_mind_adversarial(config=config)
 ```
 
-## Requirements
+For detailed training instructions, see [Training Guide](docs/TRAINING_GUIDE.md).
 
-- Python ≥ 3.10
-- PyTorch ≥ 2.6
-- PyTorch Geometric ≥ 2.3
-- Transformers ≥ 4.48
-- See `requirements.txt` for full list
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test files
+pytest tests/test_config.py
+pytest tests/test_experts.py
+
+# Run with coverage
+pytest --cov=hive_zero_core --cov-report=html
+
+# Or using make
+make test
+```
+
+The test suite includes:
+- **90+ tests** covering configuration, data loading, rewards, and expert implementations
+- Tests designed to work in sandboxed environments (no network access required)
+- Comprehensive coverage of training infrastructure
+
+### Code Quality
+
+```bash
+# Run all linters
+make lint
+
+# Format code
+make format
+
+# Individual tools
+flake8 hive_zero_core
+pylint hive_zero_core
+black hive_zero_core
+isort hive_zero_core
+mypy hive_zero_core
+```
+
+## CI/CD
+
+The project includes comprehensive CI/CD pipelines:
+
+- **Python CI**: Automated testing, linting, and code quality checks
+- **Security Scan**: CodeQL and Semgrep security analysis
+- **Dependency Management**: Automated dependency updates via Dependabot
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Documentation
+
+- [Training Guide](docs/TRAINING_GUIDE.md) - Comprehensive guide to training the system
+- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
+- [Changelog](CHANGELOG.md) - Project history and updates
+
+## License
+
+MIT License - See LICENSE file for details
+
+## Acknowledgments
+
+Built with PyTorch, PyTorch Geometric, and other excellent open-source tools.

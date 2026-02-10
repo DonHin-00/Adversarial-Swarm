@@ -1,7 +1,9 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Dict
+
 from hive_zero_core.agents.base_expert import BaseExpert
 
 
@@ -97,6 +99,7 @@ class Agent_Ghost(BaseExpert):
         return gated + self.res_proj(x)
 
 
+
 class Agent_Stego(BaseExpert):
     """
     Expert 9: Variational Autoencoder Steganography
@@ -150,6 +153,7 @@ class Agent_Stego(BaseExpert):
         mu = self.mu_head(h)
         logvar = self.logvar_head(h)
         return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+
 
 
 class Agent_Cleaner(BaseExpert):

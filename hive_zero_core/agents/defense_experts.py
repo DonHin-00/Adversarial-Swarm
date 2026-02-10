@@ -1,9 +1,12 @@
+import math
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Dict
-import math
+
 from hive_zero_core.agents.base_expert import BaseExpert
+
 
 class TrapArsenal:
     """
@@ -64,6 +67,7 @@ class TrapArsenal:
         # Exponential distribution via inverse CDF: -ln(U) / λ
         u = torch.clamp(torch.rand(batch_size, dim, device=device), min=1e-7)
         return -torch.log(u) * 2.0
+
 
 
 class Agent_Tarpit(BaseExpert):

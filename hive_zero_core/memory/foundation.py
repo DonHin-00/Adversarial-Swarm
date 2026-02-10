@@ -1,3 +1,5 @@
+from typing import Any, Tuple
+
 import torch
 import torch.nn as nn
 import numpy as np

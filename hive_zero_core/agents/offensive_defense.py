@@ -1,7 +1,9 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+
 from hive_zero_core.agents.base_expert import BaseExpert
 
 
@@ -50,6 +52,7 @@ class Agent_FeedbackLoop(BaseExpert):
 
         fused = self.fusion(torch.cat(branches, dim=-1))
         return self.norm(fused)
+
 
 
 class Agent_Flashbang(BaseExpert):

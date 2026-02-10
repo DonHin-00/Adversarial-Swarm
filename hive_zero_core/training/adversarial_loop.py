@@ -1,15 +1,20 @@
+import logging
+from pathlib import Path
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import logging
-from typing import Optional
 from hive_zero_core.hive_mind import HiveMind
+from hive_zero_core.training.config import ExperimentConfig, get_default_config
+from hive_zero_core.training.data_loader import NetworkLogDataset
 from hive_zero_core.training.rewards import CompositeReward
 
 
 def train_hive_mind_adversarial(
-    num_epochs: int = 10,
+    config: Optional[ExperimentConfig] = None,
+    num_epochs: Optional[int] = None,
     lr: float = 1e-3,
     top_k: int = 5,
     observation_dim: int = 64,
@@ -32,7 +37,8 @@ def train_hive_mind_adversarial(
       are recorded into the ThreatIntelDB, driving continuous adaptation.
 
     Args:
-        num_epochs:      Number of training epochs.
+        config:          Experiment configuration. If None, uses default config.
+        num_epochs:      Number of training epochs. Overrides config if provided.
         lr:              Peak learning rate for Adam.
         top_k:           Number of experts activated per forward pass.
         observation_dim: Observation embedding dimensionality.
@@ -40,13 +46,33 @@ def train_hive_mind_adversarial(
         blue_weight:     Coefficient for the blue-team detection loss.
         device:          Torch device; defaults to CUDA if available.
     """
+    # Setup configuration
+    if config is None:
+        config = get_default_config()
+
+    if num_epochs is not None:
+        config.training.num_epochs = num_epochs
     logger = logging.getLogger("HiveTraining")
-    logger.setLevel(logging.INFO)
+    logger.setLevel(getattr(logging, config.log_level))
+    
+    logger.info("=" * 80)
+    logger.info("Starting HiveMind Adversarial Training")
+    logger.info("=" * 80)
+    logger.info(f"Experiment: {config.experiment_name}")
+    logger.info(f"Epochs: {config.training.num_epochs}")
+    logger.info(f"Learning Rate: {config.training.learning_rate}")
+    logger.info(f"Batch Size: {config.data.batch_size}")
+
+    # Set random seed for reproducibility
+    torch.manual_seed(config.seed)
 
     # 1. Initialise HiveMind (includes ThreatIntelDB + all 19 experts)
     hive = HiveMind(observation_dim=observation_dim)
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if config.device == "auto":
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            device = torch.device(config.device)
     hive.to(device)
 
     # 2. Separate optimisers for red and blue teams (adversarial)
@@ -62,20 +88,21 @@ def train_hive_mind_adversarial(
         elif expert.name in ("WAF", "EDR", "SIEM", "IDS"):
             blue_params.extend(list(expert.parameters()))
 
+    num_epochs_val = config.training.num_epochs
     red_optimizer = optim.Adam(red_params, lr=lr)
     blue_optimizer = optim.Adam(blue_params, lr=lr)
     red_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        red_optimizer, T_max=num_epochs
+        red_optimizer, T_max=num_epochs_val
     )
     blue_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        blue_optimizer, T_max=num_epochs
+        blue_optimizer, T_max=num_epochs_val
     )
 
     # 3. Reward function
     reward_calc = CompositeReward()
 
     # 4. Training loop — alternating red/blue adversarial steps
-    for epoch in range(num_epochs):
+    for epoch in range(num_epochs_val):
 
         # --- Environment step (mocked) ---
         mock_logs = [
@@ -168,10 +195,10 @@ def train_hive_mind_adversarial(
         hive.evolve_threat_intel(results)
 
         # --- Logging ---
-        if epoch % max(1, num_epochs // 10) == 0:
+        if epoch % max(1, num_epochs_val // 10) == 0:
             stats = hive.threat_intel.get_stats()
             logger.info(
-                f"Epoch {epoch}/{num_epochs}  "
+                f"Epoch {epoch}/{num_epochs_val}  "
                 f"red_loss={red_loss.item():.4f}  "
                 f"blue_loss={blue_loss.item():.4f}  "
                 f"gen={stats['generation']}  "
@@ -179,9 +206,64 @@ def train_hive_mind_adversarial(
                 f"lr={red_scheduler.get_last_lr()[0]:.6f}"
             )
 
-    logger.info("Training loop complete.")
+        # Save checkpoint periodically
+        if (epoch + 1) % config.training.save_frequency == 0:
+            checkpoint_path = (
+                config.training.checkpoint_dir / f"checkpoint_epoch_{epoch + 1}.pt"
+            )
+            save_checkpoint(hive, red_optimizer, epoch, red_loss.item(), checkpoint_path)
+            logger.info(f"Checkpoint saved to {checkpoint_path}")
+
+    logger.info("=" * 80)
+    logger.info("Training complete!")
+    logger.info("=" * 80)
+
+    return hive
+
+
+def save_checkpoint(
+    model: HiveMind,
+    optimizer: optim.Optimizer,
+    epoch: int,
+    loss: float,
+    path: Path,
+):
+    """Save a training checkpoint."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+    }, path)
+
+
+def load_checkpoint(
+    model: HiveMind,
+    optimizer: optim.Optimizer,
+    path: Path,
+) -> int:
+    """
+    Load a training checkpoint.
+
+    Returns:
+        The epoch number from the checkpoint.
+    """
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    return checkpoint['epoch']
+
 
 
 if __name__ == "__main__":
-    logging.basicConfig()
-    train_hive_mind_adversarial(num_epochs=2)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Quick test with 2 epochs
+    from hive_zero_core.training.config import get_quick_test_config
+    config = get_quick_test_config()
+    train_hive_mind_adversarial(config=config)
+

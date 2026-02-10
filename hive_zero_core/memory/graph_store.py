@@ -1,12 +1,14 @@
+import ipaddress
+import logging
+from typing import Dict, List
+
 import torch
 import torch.nn as nn
-import logging
 from torch_geometric.data import Data
-from typing import List, Dict, Optional, Tuple, Set
-import ipaddress
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
 
 class LogEncoder(nn.Module):
     def __init__(self, node_feature_dim: int = 64, edge_feature_dim: int = 32):
@@ -19,8 +21,8 @@ class LogEncoder(nn.Module):
         self.ip_projection = nn.Linear(32, node_feature_dim)
 
         # Encoders for edge features
-        self.port_embedding = nn.Embedding(65536, edge_feature_dim) # 0-65535 ports
-        self.proto_embedding = nn.Embedding(256, edge_feature_dim) # 0-255 protocols
+        self.port_embedding = nn.Embedding(65536, edge_feature_dim)  # 0-65535 ports
+        self.proto_embedding = nn.Embedding(256, edge_feature_dim)  # 0-255 protocols
 
         # Mappings
         self.ip_to_idx: Dict[str, int] = {}
@@ -32,7 +34,7 @@ class LogEncoder(nn.Module):
             ip_int = int(ipaddress.IPv4Address(ip_str))
             # Convert to 32 bits binary representation
             # format(ip_int, '032b') creates a string like '11000000101010000000000100000001'
-            bits = [float(x) for x in format(ip_int, '032b')]
+            bits = [float(x) for x in format(ip_int, "032b")]
             return torch.tensor(bits, dtype=torch.float32)
         except (ipaddress.AddressValueError, ValueError):
             logger.warning(f"Invalid IP address encountered: {ip_str}. Using 0.0.0.0")
@@ -79,14 +81,14 @@ class LogEncoder(nn.Module):
 
         src_indices = []
         dst_indices = []
-        edge_attr_inputs = [] # List of tuples (port, proto)
+        edge_attr_inputs = []  # List of tuples (port, proto)
 
         # Process logs to build edges and register nodes
         for log in logs:
-            src = log.get('src_ip', '0.0.0.0')
-            dst = log.get('dst_ip', '0.0.0.0')
-            port = log.get('port', 0)
-            proto = log.get('proto', 6) # TCP default
+            src = log.get("src_ip", "0.0.0.0")
+            dst = log.get("dst_ip", "0.0.0.0")
+            port = log.get("port", 0)
+            proto = log.get("proto", 6)  # TCP default
 
             # Input Validation Hardening
             try:
@@ -122,8 +124,8 @@ class LogEncoder(nn.Module):
         if not x_raw_list:
             return self._empty_graph()
 
-        x_tensor = torch.stack(x_raw_list) # [num_nodes, 32]
-        x_embedded = self.ip_projection(x_tensor) # [num_nodes, node_feature_dim]
+        x_tensor = torch.stack(x_raw_list)  # [num_nodes, 32]
+        x_embedded = self.ip_projection(x_tensor)  # [num_nodes, node_feature_dim]
 
         # Create Edge Index Tensor
         edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long)
@@ -142,9 +144,11 @@ class LogEncoder(nn.Module):
             0, 255,
         )
 
-        port_embeds = self.port_embedding(ports) # [num_edges, edge_feature_dim]
-        proto_embeds = self.proto_embedding(protos) # [num_edges, edge_feature_dim]
+        port_embeds = self.port_embedding(ports)  # [num_edges, edge_feature_dim]
+        proto_embeds = self.proto_embedding(protos)  # [num_edges, edge_feature_dim]
 
-        edge_attr = torch.cat([port_embeds, proto_embeds], dim=1) # [num_edges, edge_feature_dim * 2]
+        edge_attr = torch.cat(
+            [port_embeds, proto_embeds], dim=1
+        )  # [num_edges, edge_feature_dim * 2]
 
         return Data(x=x_embedded, edge_index=edge_index, edge_attr=edge_attr)
