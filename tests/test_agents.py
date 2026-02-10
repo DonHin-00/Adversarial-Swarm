@@ -275,8 +275,8 @@ def test_hive_mind_with_local_files_only(obs_dim):
         
         # Verify from_pretrained was called with local_files_only=True
         for call in mock_tokenizer.from_pretrained.call_args_list:
-            assert call[1].get('local_files_only') == True
+            assert call[1].get('local_files_only') is True
         for call in mock_model_cls.from_pretrained.call_args_list:
-            assert call[1].get('local_files_only') == True
+            assert call[1].get('local_files_only') is True
         for call in mock_model_seq.from_pretrained.call_args_list:
-            assert call[1].get('local_files_only') == True
+            assert call[1].get('local_files_only') is True
