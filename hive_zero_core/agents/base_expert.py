@@ -63,8 +63,19 @@ class BaseExpert(nn.Module, ABC):
         """
         Bypasses gating logic and directly calls the implementation.
         Useful for internal dependencies between experts during optimization.
+        Includes error handling to prevent crashes in optimization loops.
         """
-        return self._forward_impl(x, context, mask)
+        try:
+            return self._forward_impl(x, context, mask)
+        except Exception as e:
+            self.logger.error(f"Error in {self.name} forward_ungated pass: {str(e)}")
+            # Fail gracefully
+            if isinstance(x, torch.Tensor):
+                 return torch.zeros((x.size(0), self.action_dim), device=x.device)
+            elif isinstance(x, HeteroData):
+                 if 'ip' in x:
+                     return torch.zeros((x['ip'].x.size(0), self.action_dim), device=x['ip'].x.device)
+            return torch.zeros((0, self.action_dim)) # Fallback
 
     @abstractmethod
     def _forward_impl(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor], mask: Optional[torch.Tensor]) -> torch.Tensor:

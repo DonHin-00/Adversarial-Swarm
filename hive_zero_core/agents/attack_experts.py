@@ -35,9 +35,16 @@ class SentinelAgent(BaseExpert):
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # x: [Batch, Seq, Dim] or [Batch, Seq]
         if x.dim() == 3 and x.shape[-1] > 1:
-             # Project raw observation embeddings to backbone's hidden size
-             x_projected = self.input_projection(x)
-             outputs = self.backbone(inputs_embeds=x_projected)
+             # Check if input needs projection (raw observations) or is already valid (token embeddings)
+             if x.shape[-1] == self.observation_dim:
+                 # Project raw observation embeddings to backbone's hidden size
+                 x_projected = self.input_projection(x)
+                 outputs = self.backbone(inputs_embeds=x_projected)
+             elif x.shape[-1] == self.backbone.config.hidden_size:
+                 # Already valid token embeddings, use directly
+                 outputs = self.backbone(inputs_embeds=x)
+             else:
+                 raise ValueError(f"Unexpected input dimension {x.shape[-1]}. Expected {self.observation_dim} (observation_dim) or {self.backbone.config.hidden_size} (backbone.hidden_size)")
         else:
              outputs = self.backbone(input_ids=x.long())
 

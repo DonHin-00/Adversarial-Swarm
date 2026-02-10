@@ -51,10 +51,11 @@ class CompositeReward:
         if traffic_dist.shape != baseline_dist.shape:
             return torch.tensor(0.0, device=traffic_dist.device)
 
-        # Clamp traffic_dist to avoid log(0) which produces -inf and NaNs
+        # Clamp both distributions to avoid log(0) which produces -inf and NaNs
         traffic_dist_safe = torch.clamp(traffic_dist, min=EPSILON)
+        baseline_dist_safe = torch.clamp(baseline_dist, min=EPSILON)
         # Maximize negative KL (minimize divergence)
-        kl = F.kl_div(traffic_dist_safe.log(), baseline_dist, reduction='batchmean')
+        kl = F.kl_div(traffic_dist_safe.log(), baseline_dist_safe, reduction='batchmean')
         return -kl
 
     def compute(self, adv_score: torch.Tensor, info_gain: float,
