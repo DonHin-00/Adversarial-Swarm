@@ -1,8 +1,6 @@
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from transformers import AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer
 

@@ -1,6 +1,5 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 

@@ -1,7 +1,6 @@
 import logging
 
 import torch
-import torch.nn as nn
 import torch.optim as optim
 
 from hive_zero_core.hive_mind import HiveMind
