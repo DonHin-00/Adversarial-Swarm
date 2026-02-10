@@ -44,14 +44,14 @@ class Agent_Sentinel(BaseExpert):
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if x.dim() == 3 and x.shape[-1] > 1:
-             # Project to BERT's embedding dimension if needed
-             if x.shape[-1] != self.bert_embed_dim:
-                 x_projected = self.embed_projection(x)
-             else:
-                 x_projected = x
-             outputs = self.backbone(inputs_embeds=x_projected)
+            # Project to BERT's embedding dimension if needed
+            if x.shape[-1] != self.bert_embed_dim:
+                x_projected = self.embed_projection(x)
+            else:
+                x_projected = x
+            outputs = self.backbone(inputs_embeds=x_projected)
         else:
-             outputs = self.backbone(input_ids=x.long())
+            outputs = self.backbone(input_ids=x.long())
 
         features = F.relu(outputs.logits)
         probs = torch.softmax(self.head(features), dim=-1)

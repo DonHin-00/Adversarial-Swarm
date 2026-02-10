@@ -79,3 +79,32 @@ def test_cors():
     assert response.status_code == 200
     # Starlette/FastAPI mirrors the origin if allowed, effectively acting as wildcard but stricter header
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+def test_execute_error_handling():
+    """Test that exceptions in /execute don't leak details"""
+    # Setup mock to raise an exception during encoding
+    from hive_zero_core.api.server import hive
+    original_update = hive.log_encoder.update
+    hive.log_encoder.update = MagicMock(side_effect=RuntimeError("Internal error with sensitive data"))
+    
+    payload = {
+        "logs": [{"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6}],
+        "top_k": 3,
+        "dry_run": False
+    }
+    response = client.post("/execute", json=payload)
+    
+    # Restore original
+    hive.log_encoder.update = original_update
+    
+    # Should return 500 with generic error
+    assert response.status_code == 500
+    data = response.json()
+    # Custom exception handler wraps the response in {"error": {"code": ..., "message": ...}}
+    assert "error" in data
+    assert data["error"]["code"] == 500
+    assert data["error"]["message"] == "Internal server error"
+    # Ensure sensitive data is not leaked
+    assert "sensitive data" not in data["error"]["message"].lower()
+    assert "RuntimeError" not in str(data)
+
