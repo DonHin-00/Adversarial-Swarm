@@ -21,18 +21,12 @@ class SentinelAgent(BaseExpert):
         action_dim: int,
         model_name: str = "prajjwal1/bert-tiny",
         hidden_dim: int = 64,
-        local_files_only: bool = False,
     ):
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_name, local_files_only=local_files_only
-            )
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.backbone = AutoModelForSequenceClassification.from_pretrained(
-                model_name,
-                num_labels=hidden_dim,
-                output_hidden_states=True,
-                local_files_only=local_files_only,
+                model_name, num_labels=hidden_dim, output_hidden_states=True
             )
 
             # Ensemble Heads
@@ -90,17 +84,12 @@ class PayloadGenAgent(BaseExpert):
         model_name: str = "t5-small",
         hidden_dim: int = 64,
         rag_db: Optional[Dict[str, torch.Tensor]] = None,
-        local_files_only: bool = False,
     ):
         super().__init__(observation_dim, action_dim, name="PayloadGen", hidden_dim=hidden_dim)
 
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_name, local_files_only=local_files_only
-            )
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(
-                model_name, local_files_only=local_files_only
-            )
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
             # Vector DB (Keys: Embeddings, Values: Template Tokens)
             if rag_db:
