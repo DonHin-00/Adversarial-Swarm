@@ -61,16 +61,31 @@ class Agent_DeepScope(BaseExpert):
 
         if mask is not None:
             # Hard Masking: -1e9 for invalid actions
-            # Ensure mask matches logits shape or broadcasts
+            # Ensure mask matches logits shape or broadcasts properly
             if mask.shape != logits.shape:
-                # Simple check, real implementation would handle broadcasting carefully
-                # If logits is [batch, action_dim] and mask is [batch, action_dim] -> OK
-                # If mask is [action_dim] -> OK
-                pass
+                # Handle different mask shapes:
+                # Case 1: mask is [action_dim] -> broadcast to [batch, action_dim]
+                # Case 2: mask is [batch, 1] -> broadcast to [batch, action_dim]
+                # Case 3: mask is [1, action_dim] -> broadcast to [batch, action_dim]
+                
+                # PyTorch broadcasting will handle most cases automatically
+                # But we verify dimensions are compatible
+                try:
+                    # Test if broadcasting will work by attempting the operation
+                    _ = logits * mask
+                except RuntimeError as e:
+                    self.logger.warning(
+                        f"Mask shape {mask.shape} incompatible with logits {logits.shape}: {e}"
+                    )
+                    # Fallback: if mask is 1D, unsqueeze to match batch dimension
+                    if mask.dim() == 1 and mask.size(0) == logits.size(-1):
+                        mask = mask.unsqueeze(0)  # [action_dim] -> [1, action_dim]
+                    elif mask.dim() == 1:
+                        self.logger.error(f"Cannot reconcile mask shape {mask.shape} with logits")
+                        return logits  # Return unmasked as fallback
 
             # (1 - mask) * large_negative + mask * logits
             # Assuming mask is 1 for valid, 0 for invalid
-            # Ensure 1-mask is broadcastable
             masked_logits = logits * mask + (1 - mask) * -1e9
             return masked_logits
 

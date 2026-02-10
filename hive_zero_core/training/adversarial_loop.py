@@ -28,9 +28,10 @@ def train_hive_mind_adversarial(num_epochs: int = 10):
     # Add expert parameters (e.g. adapters)
     for expert in hive.experts:
         if expert.name == "Mutator":
-            # Mutator optimizes at inference time usually,
-            # but might have learnable policy/value net (PPO) if implemented fully.
-            pass
+            # Mutator optimizes at inference time (gradient-based search in embedding space)
+            # No additional trainable parameters needed in the outer loop
+            # The Sentinel and PayloadGen within Mutator are already pre-trained/frozen
+            continue
         elif expert.name in ["Cartographer", "DeepScope", "Mimic", "Ghost"]:
             params.extend(list(expert.parameters()))
 
@@ -70,8 +71,20 @@ def train_hive_mind_adversarial(num_epochs: int = 10):
             total_loss = total_loss + loss_adv
 
         if "optimized_payload" in results:
-            # Maybe auxiliary loss?
-            pass
+            # Auxiliary loss: Ensure payload has desirable properties
+            # 1. Diversity regularization: Prevent mode collapse
+            # 2. Magnitude constraint: Keep embeddings in reasonable range
+            payload = results["optimized_payload"]
+            
+            # L2 regularization to prevent explosion
+            l2_reg = torch.mean(torch.pow(payload, 2)) * 0.01
+            
+            # Diversity loss: Maximize variance to prevent mode collapse
+            # Higher variance = more diverse payloads
+            payload_var = torch.var(payload, dim=-1).mean()
+            diversity_loss = -torch.log(payload_var + 1e-8) * 0.1
+            
+            total_loss = total_loss + l2_reg + diversity_loss
 
         if "topology" in results:
             # R_info: Entropy reduction?
