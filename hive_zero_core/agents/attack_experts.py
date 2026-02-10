@@ -29,8 +29,10 @@ class SentinelAgent(BaseExpert):
                 model_name, local_files_only=local_files_only
             )
             self.backbone = AutoModelForSequenceClassification.from_pretrained(
-                model_name, num_labels=hidden_dim, output_hidden_states=True,
-                local_files_only=local_files_only
+                model_name,
+                num_labels=hidden_dim,
+                output_hidden_states=True,
+                local_files_only=local_files_only,
             )
 
             # Ensemble Heads

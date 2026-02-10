@@ -80,10 +80,12 @@ class HiveMind(nn.Module):
     concurrent forward passes are required.
     """
 
-    def __init__(self, observation_dim: int = 64, load_hf_models: bool = True, local_files_only: bool = False):
+    def __init__(
+        self, observation_dim: int = 64, load_hf_models: bool = True, local_files_only: bool = False
+    ):
         """
         Initialize HiveMind controller.
-        
+
         Args:
             observation_dim: Dimension of observation space.
             load_hf_models: If False, defer loading of HuggingFace models (SentinelAgent, PayloadGenAgent).
@@ -213,7 +215,7 @@ class HiveMind(nn.Module):
                 f"Invalid top_k={top_k}. Expected top_k to be between 1 and {num_experts} "
                 "to safely select experts using torch.topk."
             )
-        
+
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 
