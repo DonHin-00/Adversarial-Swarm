@@ -167,7 +167,16 @@ class HiveMind(nn.Module):
         # 2. Gating
         weights, logits = self.gating_network(global_state, training=self.training)
 
-        # 3. Select Top-K
+        # 3. Select Top-K with validation
+        num_experts = len(self.experts)
+        if num_experts == 0:
+            raise ValueError("No experts are available for routing; cannot select top_k experts.")
+        if top_k < 1 or top_k > num_experts:
+            raise ValueError(
+                f"Invalid top_k={top_k}. Expected top_k to be between 1 and {num_experts} "
+                "to safely select experts using torch.topk."
+            )
+        
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 

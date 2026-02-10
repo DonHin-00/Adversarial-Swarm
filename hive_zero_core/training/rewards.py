@@ -82,7 +82,9 @@ class CompositeReward:
         baseline_dist_norm = self._renormalize_distribution(baseline_dist)
 
         # Maximize negative KL (minimize divergence)
-        kl = F.kl_div(traffic_dist_norm.log(), baseline_dist_norm, reduction="batchmean")
+        # kl_div(input, target) computes KL(target || exp(input))
+        # To compute KL(traffic || baseline), we need input=log(baseline), target=traffic
+        kl = F.kl_div(baseline_dist_norm.log(), traffic_dist_norm, reduction="batchmean")
         return -kl
 
     def compute(
