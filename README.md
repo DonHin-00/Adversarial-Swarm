@@ -51,3 +51,31 @@ Run the comprehensive test suite to verify agent logic and architectures:
 ```bash
 pytest tests/test_agents.py
 ```
+
+## 🎓 Advanced Features
+
+### Skill Knowledge System
+Agents now have proficiency levels (Novice, Intermediate, Expert, Master) and track skill usage:
+```python
+print(f"Skill Level: {agent.skill_level.name}")
+print(f"Effectiveness: {agent.get_effectiveness_score()}")
+```
+
+### Threat Intelligence Store
+Centralized knowledge management with skill taxonomy and knowledge sharing:
+```python
+from hive_zero_core.memory.threat_intelligence import ThreatIntelligenceStore
+kb = ThreatIntelligenceStore()
+```
+
+### Advanced Reward System
+8 affect types for comprehensive reward shaping:
+- Adversarial, Information, Stealth, Temporal
+- Resource, Reliability, Novelty, Coordination
+
+```python
+from hive_zero_core.training.advanced_rewards import AdvancedCompositeReward
+rewards = AdvancedCompositeReward().compute(...)
+```
+
+See [Skill Knowledge & Affects Documentation](docs/SKILL_KNOWLEDGE_AFFECTS.md) for details.
