@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
+import os
 import torch
 import uvicorn
 import asyncio
@@ -38,10 +39,9 @@ app = FastAPI(
 
 # Enable CORS for cross-origin requests
 # Note: For production, set ALLOWED_ORIGINS env var (comma-separated)
-import os
 # Default allows common localhost ports for development
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000,http://127.0.0.1:8000,http://127.0.0.1:3000")
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -220,7 +220,7 @@ async def execute_swarm(request: CommandRequest):
             "actions": formatted_results
         }
 
-    except Exception as e:
+    except Exception:
         logger.exception("Execution error")
         raise HTTPException(status_code=500, detail="Internal server error")
 

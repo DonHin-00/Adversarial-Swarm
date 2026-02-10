@@ -22,8 +22,8 @@ class Agent_Sentinel(BaseExpert):
             self.head = nn.Linear(hidden_dim, 2)
             
             # Projection layer to match BERT's embedding dimension
-            bert_embed_dim = self.backbone.config.hidden_size
-            self.embed_projection = nn.Linear(observation_dim, bert_embed_dim)
+            self.bert_embed_dim = self.backbone.config.hidden_size
+            self.embed_projection = nn.Linear(observation_dim, self.bert_embed_dim)
 
             self.rules = [
                 r"(?i)<script",
@@ -44,8 +44,11 @@ class Agent_Sentinel(BaseExpert):
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if x.dim() == 3 and x.shape[-1] > 1:
-             # Project to BERT's embedding dimension before passing as inputs_embeds
-             x_projected = self.embed_projection(x)
+             # Project to BERT's embedding dimension if needed
+             if x.shape[-1] != self.bert_embed_dim:
+                 x_projected = self.embed_projection(x)
+             else:
+                 x_projected = x
              outputs = self.backbone(inputs_embeds=x_projected)
         else:
              outputs = self.backbone(input_ids=x.long())

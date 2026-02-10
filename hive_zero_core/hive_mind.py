@@ -70,9 +70,9 @@ class HiveMind(nn.Module):
 
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
 
-    def forward(self, top_k: int = 3, *, raw_logs: List[Dict] = None, data: Any = None) -> Dict[str, Any]:
+    def forward(self, raw_logs: Optional[List[Dict]] = None, top_k: int = 3, *, data: Any = None) -> Dict[str, Any]:
         # Accept either raw_logs or pre-encoded data to avoid duplicate encoding
-        # Use keyword-only arguments to make the API more explicit
+        # raw_logs can be passed positionally for backward compatibility
         if data is None:
             if raw_logs is None:
                 raise ValueError("Either raw_logs or data must be provided")
