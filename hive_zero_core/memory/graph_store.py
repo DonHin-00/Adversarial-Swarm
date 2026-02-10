@@ -15,7 +15,6 @@ class HeteroLogEncoder(nn.Module):
 
         self.ip_encoder = nn.Linear(32, node_embed_dim)
         self.port_encoder = nn.Embedding(65536, node_embed_dim)
-        self.proto_encoder = nn.Embedding(256, node_embed_dim)
 
         self.tactic_encoder = nn.Embedding(14, node_embed_dim)
         self.technique_encoder = nn.Embedding(1000, node_embed_dim)

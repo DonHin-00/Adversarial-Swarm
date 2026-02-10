@@ -19,8 +19,8 @@ class Agent_Cartographer(BaseExpert):
         self.kb = MitreKnowledgeBase()
 
         self.metadata = (
-            ['ip', 'port', 'protocol', 'technique'],
-            [('ip', 'flow', 'ip'), ('ip', 'binds', 'port'), ('port', 'uses', 'protocol'), ('ip', 'exhibits', 'technique')]
+            ['ip', 'port', 'technique'],
+            [('ip', 'flow', 'ip'), ('ip', 'binds', 'port'), ('ip', 'exhibits', 'technique')]
         )
 
         self.conv1 = HGTConv(observation_dim, hidden_dim, self.metadata, heads=4)

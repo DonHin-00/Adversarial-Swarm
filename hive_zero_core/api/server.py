@@ -37,12 +37,15 @@ app = FastAPI(
 )
 
 # Enable CORS for cross-origin requests
+# Note: For production, set ALLOWED_ORIGINS env var (comma-separated)
+import os
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=False,  # Disabled when using specific origins for security
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 hive = HiveMind(observation_dim=64)
@@ -193,7 +196,7 @@ async def execute_swarm(request: CommandRequest):
             logger.warning(f"Safety violation: {reason}")
             return {"status": "blocked", "reason": reason}
 
-        results = hive.forward(raw_logs, top_k=request.top_k)
+        results = hive.forward(data=data, top_k=request.top_k)
 
         formatted_results = {}
         for k, v in results.items():
@@ -216,8 +219,8 @@ async def execute_swarm(request: CommandRequest):
         }
 
     except Exception as e:
-        logger.error(f"Execution error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Execution error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 def start_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)

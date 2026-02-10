@@ -70,9 +70,13 @@ class HiveMind(nn.Module):
 
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
 
-    def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
-        data = self.log_encoder.update(raw_logs)
-
+    def forward(self, raw_logs: List[Dict] = None, data: Any = None, top_k: int = 3) -> Dict[str, Any]:
+        # Accept either raw_logs or pre-encoded data to avoid duplicate encoding
+        if data is None:
+            if raw_logs is None:
+                raise ValueError("Either raw_logs or data must be provided")
+            data = self.log_encoder.update(raw_logs)
+        
         device = next(self.parameters()).device
         if 'ip' in data.node_types and hasattr(data['ip'], 'x') and data['ip'].x.size(0) > 0:
             global_state = torch.mean(data['ip'].x, dim=0, keepdim=True)

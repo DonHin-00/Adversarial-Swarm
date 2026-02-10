@@ -48,7 +48,6 @@ class LatentWorldModel(nn.Module):
         Simulate a trajectory in latent space.
         """
         z = self.encoder(start_obs)
-        rewards = []
 
         for _ in range(horizon):
             pass

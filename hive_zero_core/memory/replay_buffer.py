@@ -18,7 +18,8 @@ class PrioritizedReplayBuffer:
         else:
             self.buffer[self.pos] = (state, action, reward, next_state)
 
-        self.priorities[self.pos] = max_prio
+        # Use the provided priority or max_prio, whichever is higher
+        self.priorities[self.pos] = max(max_prio, priority)
         self.pos = (self.pos + 1) % self.capacity
 
     def sample(self, batch_size: int, beta: float = 0.4) -> Tuple[List[Any], np.ndarray, torch.Tensor]:
