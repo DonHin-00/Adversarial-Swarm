@@ -54,8 +54,9 @@ class CompositeReward:
         baseline_dist_clamped = torch.clamp(baseline_dist, min=epsilon)
         
         # Renormalize after clamping to maintain valid probability distributions
-        traffic_dist_clamped = traffic_dist_clamped / traffic_dist_clamped.sum(dim=-1, keepdim=True)
-        baseline_dist_clamped = baseline_dist_clamped / baseline_dist_clamped.sum(dim=-1, keepdim=True)
+        # Add epsilon to denominator to prevent division by zero
+        traffic_dist_clamped = traffic_dist_clamped / (traffic_dist_clamped.sum(dim=-1, keepdim=True) + epsilon)
+        baseline_dist_clamped = baseline_dist_clamped / (baseline_dist_clamped.sum(dim=-1, keepdim=True) + epsilon)
 
         # Maximize negative KL (minimize divergence)
         kl = F.kl_div(traffic_dist_clamped.log(), baseline_dist_clamped, reduction='batchmean')

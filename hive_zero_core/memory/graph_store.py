@@ -143,5 +143,3 @@ class HeteroLogEncoder(nn.Module):
             data['port', 'uses', 'protocol'].edge_index = torch.empty(2, 0, dtype=torch.long, device=device)
 
         return data
-
-        return data
