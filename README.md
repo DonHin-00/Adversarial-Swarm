@@ -16,6 +16,10 @@ Adversarial-Swarm is a sophisticated multi-expert architecture system featuring 
 - **Graph-Based Memory**: Sophisticated knowledge representation using PyTorch Geometric
 - **Dynamic Gating**: Intelligent expert selection based on operational context
 - **Active Defense**: Integrated counter-strike and defensive capabilities
+- **Comprehensive Training**: Configurable training loop with adversarial learning
+- **Flexible Configuration**: Hierarchical configuration system for experiments
+- **Checkpoint Support**: Save and resume training from checkpoints
+- **Extensive Testing**: 55+ tests covering all major components
 
 ## Requirements
 
@@ -102,6 +106,20 @@ raw_logs = [
 results = hive.forward(raw_logs, top_k=3)
 ```
 
+### Training the System
+
+Train the HiveMind using adversarial learning:
+
+```python
+from hive_zero_core.training import train_hive_mind_adversarial, get_quick_test_config
+
+# Quick test (2 epochs, 100 samples)
+config = get_quick_test_config()
+trained_hive = train_hive_mind_adversarial(config=config)
+```
+
+For detailed training instructions, see [Training Guide](docs/TRAINING_GUIDE.md).
+
 ## Architecture
 
 ### Expert Clusters
@@ -138,12 +156,21 @@ results = hive.forward(raw_logs, top_k=3)
 # Run all tests
 pytest
 
+# Run specific test files
+pytest tests/test_config.py
+pytest tests/test_experts.py
+
 # Run with coverage
 pytest --cov=hive_zero_core --cov-report=html
 
 # Or using make
 make test
 ```
+
+The test suite includes:
+- **55+ tests** covering configuration, data loading, rewards, and expert implementations
+- Tests designed to work in sandboxed environments (no network access required)
+- Comprehensive coverage of training infrastructure
 
 ### Code Quality
 
@@ -172,11 +199,33 @@ The project includes comprehensive CI/CD pipelines:
 
 ## Contributing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
+
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Documentation
+
+- [Training Guide](docs/TRAINING_GUIDE.md) - Comprehensive guide to training the system
+- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
+- [Changelog](CHANGELOG.md) - Project history and updates
+
+## Project Status
+
+**Current Version**: 0.1.0 (Active Development)
+
+Recent improvements:
+- ✅ Fixed critical incomplete implementations in training loop
+- ✅ Added comprehensive configuration management system
+- ✅ Implemented data loading with synthetic data generation
+- ✅ Added checkpoint save/load functionality
+- ✅ Expanded test coverage to 55+ tests
+- ✅ Created detailed training documentation
+
+See [CHANGELOG.md](CHANGELOG.md) for full project history.
 
 ## License
 
