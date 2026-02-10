@@ -62,15 +62,12 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Enable CORS for cross-origin requests
-# Secure default: localhost only. For production, set CORS_ORIGINS env var.
-origins_str = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
-origins = [o.strip() for o in origins_str.split(",")]
-# Disable credentials if wildcard is used
-allow_credentials = "*" not in origins
+# Strictly configurable via env var, default to wildcard for dev convenience
+origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=allow_credentials,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
