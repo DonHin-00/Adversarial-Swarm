@@ -1,12 +1,15 @@
+from typing import Dict, List, Tuple, TypedDict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Tuple, TypedDict
-from hive_zero_core.utils.logging_config import setup_logger
+
+from hive_zero_core.agents.attack_experts import MutatorAgent, PayloadGenAgent, SentinelAgent
+from hive_zero_core.agents.post_experts import CleanerAgent, GhostAgent, MimicAgent, StegoAgent
+from hive_zero_core.agents.recon_experts import CartographerAgent, ChronosAgent, DeepScopeAgent
 from hive_zero_core.memory.graph_store import HeteroLogEncoder
-from hive_zero_core.agents.recon_experts import CartographerAgent, DeepScopeAgent, ChronosAgent
-from hive_zero_core.agents.attack_experts import SentinelAgent, PayloadGenAgent, MutatorAgent
-from hive_zero_core.agents.post_experts import MimicAgent, GhostAgent, StegoAgent, CleanerAgent
+from hive_zero_core.utils.logging_config import setup_logger
+
 
 class NoisyGatingNetwork(nn.Module):
     """
@@ -15,7 +18,10 @@ class NoisyGatingNetwork(nn.Module):
     Provides learnable routing with exploration noise to prevent
     expert collapse during training.
     """
-    def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64, noise_epsilon: float = 1e-2):
+
+    def __init__(
+        self, input_dim: int, num_experts: int, hidden_dim: int = 64, noise_epsilon: float = 1e-2
+    ):
         """
         Args:
             input_dim: Dimension of the global state embedding.
@@ -46,6 +52,7 @@ class NoisyGatingNetwork(nn.Module):
         weights = F.softmax(logits, dim=-1)
         return weights, logits
 
+
 class HiveResults(TypedDict, total=False):
     topology: torch.Tensor
     constraints: torch.Tensor
@@ -59,18 +66,20 @@ class HiveResults(TypedDict, total=False):
     cleanup: torch.Tensor
     gating_weights: torch.Tensor
 
+
 class HiveMind(nn.Module):
     """
     Central Controller for the HIVE-ZERO H-MARL System.
 
     Coordinates a swarm of 10 specialized agents using a sparse MoE architecture.
     Handles data encoding, routing via Noisy Gating, and result aggregation.
-    
+
     **Thread Safety:** This module is NOT thread-safe. The `is_active` flags on
     experts are modified during forward passes. Use a single HiveMind instance
     per thread, or add external synchronization (e.g., threading.Lock) if
     concurrent forward passes are required.
     """
+
     def __init__(self, observation_dim: int = 64):
         super().__init__()
         self.logger = setup_logger("HiveMind")
@@ -86,38 +95,45 @@ class HiveMind(nn.Module):
 
         self.expert_sentinel = SentinelAgent(observation_dim, action_dim=2)
         self.expert_payloadgen = PayloadGenAgent(observation_dim, action_dim=128)
-        self.expert_mutator = MutatorAgent(observation_dim, action_dim=128,
-                                           sentinel_expert=self.expert_sentinel,
-                                           generator_expert=self.expert_payloadgen)
+        self.expert_mutator = MutatorAgent(
+            observation_dim,
+            action_dim=128,
+            sentinel_expert=self.expert_sentinel,
+            generator_expert=self.expert_payloadgen,
+        )
 
         self.expert_mimic = MimicAgent(observation_dim, action_dim=2)
         self.expert_ghost = GhostAgent(observation_dim, action_dim=5)
         self.expert_stego = StegoAgent(observation_dim, action_dim=64)
         self.expert_cleaner = CleanerAgent(observation_dim, action_dim=10)
 
-        self.experts = nn.ModuleList([
-            self.expert_cartographer,
-            self.expert_deepscope,
-            self.expert_chronos,
-            self.expert_payloadgen,
-            self.expert_mutator,
-            self.expert_sentinel,
-            self.expert_mimic,
-            self.expert_ghost,
-            self.expert_stego,
-            self.expert_cleaner
-        ])
+        self.experts = nn.ModuleList(
+            [
+                self.expert_cartographer,
+                self.expert_deepscope,
+                self.expert_chronos,
+                self.expert_payloadgen,
+                self.expert_mutator,
+                self.expert_sentinel,
+                self.expert_mimic,
+                self.expert_ghost,
+                self.expert_stego,
+                self.expert_cleaner,
+            ]
+        )
 
         # 3. Gating
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
-        
+
         # 4. Projection layer for Sentinel (observation_dim -> BERT hidden_size)
         # The Sentinel's BERT backbone expects hidden_size embeddings
         try:
             sentinel_hidden_size = self.expert_sentinel.backbone.config.hidden_size
             self.sentinel_projection = nn.Linear(observation_dim, sentinel_hidden_size)
         except (AttributeError, RuntimeError) as e:
-            self.logger.warning(f"Failed to create Sentinel projection layer: {e}. Using default hidden_size=128")
+            self.logger.warning(
+                f"Failed to create Sentinel projection layer: {e}. Using default hidden_size=128"
+            )
             self.sentinel_projection = nn.Linear(observation_dim, 128)
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> HiveResults:
@@ -141,10 +157,12 @@ class HiveMind(nn.Module):
 
         # Global State Embedding from HeteroData
         # Aggregate IP nodes?
-        if 'ip' in data.node_types and data['ip'].x.size(0) > 0:
-            global_state = torch.mean(data['ip'].x, dim=0, keepdim=True)
+        if "ip" in data.node_types and data["ip"].x.size(0) > 0:
+            global_state = torch.mean(data["ip"].x, dim=0, keepdim=True)
         else:
-            global_state = torch.zeros(1, self.observation_dim, device=next(self.parameters()).device)
+            global_state = torch.zeros(
+                1, self.observation_dim, device=next(self.parameters()).device
+            )
 
         # 2. Gating
         weights, logits = self.gating_network(global_state, training=self.training)

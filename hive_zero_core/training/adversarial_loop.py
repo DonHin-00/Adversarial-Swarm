@@ -1,12 +1,15 @@
+import logging
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import logging
-import numpy as np
-from hive_zero_core.hive_mind import HiveMind
-from hive_zero_core.training.rewards import CompositeReward
-from hive_zero_core.memory.replay_buffer import PrioritizedReplayBuffer
+
 from hive_zero_core.environment.hive_env import HiveZeroEnv
+from hive_zero_core.hive_mind import HiveMind
+from hive_zero_core.memory.replay_buffer import PrioritizedReplayBuffer
+from hive_zero_core.training.rewards import CompositeReward
+
 
 def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
     logger = logging.getLogger("HiveTraining")
@@ -28,7 +31,16 @@ def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
             # Sentinel is part of the 'Blue Team' logic, implicitly trained or pre-trained.
             # Here we might freeze it or train it adversarially.
             pass
-        elif expert.name in ["Cartographer", "DeepScope", "Mimic", "Ghost", "Chronos", "PayloadGen", "Cleaner", "Stego"]:
+        elif expert.name in [
+            "Cartographer",
+            "DeepScope",
+            "Mimic",
+            "Ghost",
+            "Chronos",
+            "PayloadGen",
+            "Cleaner",
+            "Stego",
+        ]:
             # Note: PayloadGen has fixed RAG DB but trainable generator parts if any
             params.extend(list(expert.parameters()))
 
@@ -50,7 +62,9 @@ def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
             # Convert Obs to Logs format for HiveMind
             # HiveMind expects List[Dict]. Env gives vector.
             # We mock the translation:
-            mock_logs = [{'src_ip': '1.1.1.1', 'dst_ip': '2.2.2.2', 'port': 80, 'proto': 6}] # Using dummy for graph structure
+            mock_logs = [
+                {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6}
+            ]  # Using dummy for graph structure
             # But we inject the Env's observation features into the graph manually?
             # Or simpler: HiveMind forward handles the graph update.
             # We assume Env Obs *is* the feature vector for the global node?
@@ -73,7 +87,7 @@ def train_hive_mind_adversarial(num_epochs: int = 10, batch_size: int = 4):
                     if flat.size(0) >= 128:
                         action_tensor = flat[:128]
                     else:
-                        action_tensor[:flat.size(0)] = flat
+                        action_tensor[: flat.size(0)] = flat
 
             # --- Environment Step ---
             action_np = action_tensor.detach().cpu().numpy()
