@@ -208,13 +208,19 @@ class ThreatIntelDB(nn.Module):
 
     def _ingest(self, embeddings: torch.Tensor, bank: torch.Tensor,
                 count: torch.Tensor, ptr: torch.Tensor):
-        """Insert or EMA-update signatures in the given bank."""
+        """Insert or EMA-update signatures in the given bank.
+
+        Normalises the bank once up-front (and re-normalises only the
+        affected rows after an update) to avoid O(N * bank_size * D)
+        repeated full-bank normalisation.
+        """
+        bank_norm = F.normalize(bank, dim=-1)  # Normalise once
+
         for i in range(embeddings.size(0)):
             emb = embeddings[i]
 
             # Check novelty against this bank
             emb_norm = F.normalize(emb.unsqueeze(0), dim=-1)
-            bank_norm = F.normalize(bank, dim=-1)
             cos_sim = torch.matmul(emb_norm, bank_norm.t()).squeeze(0)
             max_sim, max_idx = cos_sim.max(dim=0)
 
@@ -225,12 +231,16 @@ class ThreatIntelDB(nn.Module):
                     + (1 - self.ema_decay) * emb
                 )
                 count[max_idx] += 1
+                # Re-normalise only the updated row
+                bank_norm[max_idx] = F.normalize(bank[max_idx].unsqueeze(0), dim=-1).squeeze(0)
             else:
                 # Novel entry → overwrite at pointer position
                 idx = ptr.item() % bank.size(0)
                 bank[idx] = emb
                 count[idx] = 1
                 ptr += 1
+                # Re-normalise only the new row
+                bank_norm[idx] = F.normalize(bank[idx].unsqueeze(0), dim=-1).squeeze(0)
 
     def _query(self, query: torch.Tensor, bank: torch.Tensor,
                top_k: int) -> Tuple[torch.Tensor, torch.Tensor]:

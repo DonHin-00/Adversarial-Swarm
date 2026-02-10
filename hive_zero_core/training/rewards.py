@@ -52,9 +52,16 @@ class CompositeReward:
             return torch.tensor(0.0, device=traffic_dist.device,
                                 dtype=traffic_dist.dtype)
 
-        traffic_log = torch.log(torch.clamp(traffic_dist, min=1e-8))
+        # Clamp, then normalise to valid probability distributions so that
+        # KL(P||Q) is well-defined even for un-normalised inputs.
+        traffic_clamped = torch.clamp(traffic_dist, min=1e-8)
         baseline_clamped = torch.clamp(baseline_dist, min=1e-8)
-        kl = F.kl_div(traffic_log, baseline_clamped, reduction='batchmean')
+
+        traffic_norm = traffic_clamped / traffic_clamped.sum(dim=-1, keepdim=True)
+        baseline_norm = baseline_clamped / baseline_clamped.sum(dim=-1, keepdim=True)
+
+        traffic_log = torch.log(traffic_norm)
+        kl = F.kl_div(traffic_log, baseline_norm, reduction='batchmean')
         return -kl
 
     def calculate_temporal_reward(self, elapsed_steps: int,

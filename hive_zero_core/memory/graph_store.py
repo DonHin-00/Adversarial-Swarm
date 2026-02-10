@@ -123,13 +123,17 @@ class LogEncoder(nn.Module):
         # Create Edge Index Tensor
         edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long)
 
-        # Create Edge Attributes Tensor
+        # Create Edge Attributes Tensor on the same device as the embedding layers
+        # to avoid device-mismatch errors when LogEncoder is moved to GPU.
+        emb_device = self.port_embedding.weight.device
         ports = torch.clamp(
-            torch.tensor([attr[0] for attr in edge_attr_inputs], dtype=torch.long),
+            torch.tensor([attr[0] for attr in edge_attr_inputs], dtype=torch.long,
+                         device=emb_device),
             0, 65535,
         )
         protos = torch.clamp(
-            torch.tensor([attr[1] for attr in edge_attr_inputs], dtype=torch.long),
+            torch.tensor([attr[1] for attr in edge_attr_inputs], dtype=torch.long,
+                         device=emb_device),
             0, 255,
         )
 

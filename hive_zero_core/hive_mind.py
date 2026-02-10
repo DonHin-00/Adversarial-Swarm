@@ -90,7 +90,7 @@ class HiveMind(nn.Module):
         # 2. Evolving Threat Intelligence Database
         self.threat_intel = ThreatIntelDB(embedding_dim=observation_dim)
 
-        # 3. Expert Clusters (18 experts total)
+        # 3. Expert Clusters (19 experts across 7 clusters)
 
         # Cluster A: Recon
         self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)

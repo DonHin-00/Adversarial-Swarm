@@ -115,6 +115,10 @@ class Agent_WAF(BaseExpert):
         """
         EMA update of the signature bank with recent suspicious embeddings.
 
+        Each payload embedding is assigned to its closest existing signature
+        (via scaled dot-product similarity), and that signature slot is
+        EMA-updated towards the mean of all payloads assigned to it.
+
         Args:
             payload_embeddings: [N, hidden_dim] — encoded payloads that
                                 triggered high-confidence detections.
@@ -122,14 +126,24 @@ class Agent_WAF(BaseExpert):
         if payload_embeddings.size(0) == 0:
             return
 
-        # Pick top-N closest signatures to update
-        features = payload_embeddings[:self.num_signatures]
-        n = min(features.size(0), self.num_signatures)
+        n = min(payload_embeddings.size(0), self.num_signatures)
+        features = payload_embeddings[:n]  # [N, H]
 
-        self.signature_bank[:n] = (
-            self.ema_decay * self.signature_bank[:n]
-            + (1 - self.ema_decay) * features[:n]
-        )
+        # Compute similarity between features and current signature bank
+        sim = torch.matmul(features, self.signature_bank.t())
+        sim = sim / (self.signature_bank.size(1) ** 0.5)
+
+        # For each feature, find the index of its most similar signature
+        best_idx = sim.argmax(dim=1)  # [N]
+
+        # For each unique signature index, average assigned features and apply EMA
+        for idx in best_idx.unique():
+            assigned = features[best_idx == idx]  # [K, H]
+            mean_feature = assigned.mean(dim=0)   # [H]
+            self.signature_bank[idx] = (
+                self.ema_decay * self.signature_bank[idx]
+                + (1 - self.ema_decay) * mean_feature
+            )
 
 
 # ---------------------------------------------------------------------------

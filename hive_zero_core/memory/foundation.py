@@ -94,7 +94,8 @@ class WeightInitializer:
                 with torch.no_grad():
                     num_experts = last_linear.out_features
                     if num_experts >= 14:
-                        last_linear.bias[10:] += 2.0
+                        # Boost only the original defence/kill-chain experts (indices 10–13)
+                        last_linear.bias[10:14] += 2.0
                         last_linear.bias[0] += 1.0
 
 

@@ -62,8 +62,12 @@ class BaseExpert(nn.Module, ABC):
 
         try:
             if self._use_checkpoint and self.training:
+                # Wrap non-Tensor args (context, mask may be None) in a closure
+                # to avoid checkpoint errors with non-Tensor inputs.
+                def _run_forward_impl(input_x: torch.Tensor) -> torch.Tensor:
+                    return self._forward_impl(input_x, context, mask)
                 return torch.utils.checkpoint.checkpoint(
-                    self._forward_impl, x, context, mask, use_reentrant=False
+                    _run_forward_impl, x, use_reentrant=False
                 )
             return self._forward_impl(x, context, mask)
         except Exception as e:
