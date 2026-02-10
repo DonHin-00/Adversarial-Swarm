@@ -39,7 +39,9 @@ app = FastAPI(
 # Enable CORS for cross-origin requests
 # Note: For production, set ALLOWED_ORIGINS env var (comma-separated)
 import os
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+# Default allows common localhost ports for development
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000,http://127.0.0.1:8000,http://127.0.0.1:3000")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
