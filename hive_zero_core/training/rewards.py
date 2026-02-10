@@ -30,8 +30,14 @@ class CompositeReward:
         Note:
             This function assumes dist contains non-negative values. Negative values
             will be clamped to epsilon, which may not reflect the intended distribution.
+            
+            Two-step clamping strategy:
+            1. Clamp individual values to prevent log(0) in KL divergence
+            2. Clamp sum to prevent division by zero when normalizing
         """
+        # Step 1: Clamp values to prevent log(0)
         dist_clamped = torch.clamp(dist, min=epsilon)
+        # Step 2: Normalize with safe division
         return dist_clamped / torch.clamp(dist_clamped.sum(dim=-1, keepdim=True), min=epsilon)
 
     def calculate_adversarial_reward(self, sentinel_score: torch.Tensor) -> torch.Tensor:
