@@ -80,8 +80,12 @@ class Agent_Tarpit(BaseExpert):
         """
         Generate trap templates with caching for improved performance.
         Only regenerates if batch size or device changes.
+        Note: Caching is only enabled during eval mode to maintain training variability.
         """
-        if (self._trap_cache is not None and 
+        # Only use cache in eval mode to preserve training randomness
+        use_cache = not self.training
+        
+        if (use_cache and self._trap_cache is not None and 
             self._cache_batch_size == batch_size and 
             self._trap_cache.device == device):
             return self._trap_cache
@@ -112,9 +116,10 @@ class Agent_Tarpit(BaseExpert):
         # Stack: [Batch, Num_Traps, Action_Dim]
         trap_stack = torch.stack(traps, dim=1)
         
-        # Cache for reuse (keep on same device to avoid unnecessary copies)
-        self._trap_cache = trap_stack.detach()
-        self._cache_batch_size = batch_size
+        # Cache for reuse in eval mode only (keep on same device to avoid unnecessary copies)
+        if use_cache:
+            self._trap_cache = trap_stack.detach()
+            self._cache_batch_size = batch_size
         
         return trap_stack
 

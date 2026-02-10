@@ -8,7 +8,6 @@ import torch
 import time
 from hive_zero_core.memory.graph_store import LogEncoder
 from hive_zero_core.memory.foundation import SyntheticExperienceGenerator
-from hive_zero_core.hive_mind import HiveMind
 
 def test_log_encoder_optimization():
     """Test LogEncoder with optimized node feature creation."""

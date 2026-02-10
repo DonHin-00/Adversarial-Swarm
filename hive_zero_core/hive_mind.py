@@ -82,6 +82,19 @@ class HiveMind(nn.Module):
             self.expert_glasshouse    # 13
         ])
 
+        # Validate expert ordering at initialization to fail fast if order changes
+        expected_names = [
+            "Cartographer", "DeepScope", "Chronos", "PayloadGen", "Mutator",
+            "Sentinel", "Mimic", "Ghost", "Stego", "Cleaner",
+            "Tarpit", "FeedbackLoop", "Flashbang", "GlassHouse"
+        ]
+        for idx, (expert, expected_name) in enumerate(zip(self.experts, expected_names)):
+            if expert.name != expected_name:
+                raise ValueError(
+                    f"Expert at index {idx} has name '{expert.name}' but expected '{expected_name}'. "
+                    f"Expert ordering in self.experts must match the index-based dispatch in forward()."
+                )
+
         # 3. Gating Mechanism
         self.gating_network = GatingNetwork(observation_dim, num_experts=len(self.experts))
 
@@ -143,7 +156,7 @@ class HiveMind(nn.Module):
                     results["constraints"] = out
 
                 elif idx == 2:  # Chronos
-                    dummy_times = torch.randn(1, 10)
+                    dummy_times = torch.randn(1, 10, device=global_state.device, dtype=global_state.dtype)
                     out = expert(dummy_times)
                     results["timing"] = out
 
@@ -168,7 +181,7 @@ class HiveMind(nn.Module):
                     results["hiding_spot"] = out
 
                 elif idx == 8:  # Stego
-                    dummy_data = torch.rand(1, self.observation_dim)
+                    dummy_data = torch.rand(1, self.observation_dim, device=global_state.device, dtype=global_state.dtype)
                     out = expert(dummy_data)
                     results["covert_channel"] = out
 

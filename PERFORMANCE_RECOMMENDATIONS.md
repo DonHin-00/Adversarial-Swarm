@@ -10,22 +10,22 @@ This document provides a comprehensive analysis of performance optimizations imp
 
 #### LogEncoder Vectorization
 - **Location**: `hive_zero_core/memory/graph_store.py`
-- **Change**: Pre-allocate tensors instead of list appending
-- **Impact**: Reduced memory allocations and improved cache locality
+- **Change**: Use list comprehension with `torch.stack()` for efficient batching; add device awareness
+- **Impact**: Reduced Python-level overhead and better throughput
 - **Status**: ✅ Implemented
 
 #### Edge Attribute Processing
 - **Location**: `hive_zero_core/memory/graph_store.py`
-- **Change**: Use `zip()` for vectorized unpacking
-- **Impact**: Cleaner code, fewer temporary objects
+- **Change**: Use `zip()` for vectorized unpacking; create tensors on correct device
+- **Impact**: Cleaner code, fewer temporary objects, no device mismatches
 - **Status**: ✅ Implemented
 
 ### 2. Computational Optimizations
 
 #### Agent_Tarpit Trap Caching
 - **Location**: `hive_zero_core/agents/defense_experts.py`
-- **Change**: Cache trap templates across forward passes
-- **Impact**: **8.65x speedup** (1.31ms → 0.15ms)
+- **Change**: Cache trap templates across forward passes (eval mode only)
+- **Impact**: **7.93x speedup** (1.28ms → 0.16ms) in eval mode; training randomness preserved
 - **Status**: ✅ Implemented
 
 #### Agent_Mutator Optimization

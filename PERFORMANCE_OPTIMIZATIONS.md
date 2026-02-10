@@ -10,16 +10,18 @@ This document details the performance optimizations implemented in the Adversari
 **Problem:** 
 - Node features were created by appending to a list in a loop, then stacking
 - Edge attributes were constructed using list comprehensions with individual tensor conversions
+- Tensors created on CPU causing device mismatches
 
 **Solution:**
-- Pre-allocate tensor for all node features and fill in-place
+- Use list comprehension with `torch.stack()` for efficient node feature batching
 - Use `zip()` to unpack edge attributes and create tensors in one operation
+- Added device awareness to create all tensors on the correct device
 - Added early exit for empty edge lists
 
 **Impact:**
-- Reduced memory allocations
-- Better cache locality
-- More efficient for large graphs
+- Reduced Python-level overhead
+- Better throughput for graph construction
+- No device mismatch errors when using CUDA
 
 **Code Changes:**
 ```python
@@ -31,30 +33,42 @@ for i in range(num_nodes):
 x_tensor = torch.stack(x_raw_list)
 
 # After:
-x_tensor = torch.zeros((num_nodes, 32), dtype=torch.float32)
-for i in range(num_nodes):
-    ip_str = self.idx_to_ip[i]
-    x_tensor[i] = self._ip_to_bits(ip_str)
+device = self.ip_projection.weight.device
+x_raw_list = [self._ip_to_bits(self.idx_to_ip[i]) for i in range(num_nodes)]
+x_tensor = torch.stack(x_raw_list).to(device)
 ```
+
+**Note:** The PR description mentioned "caching for port and protocol embeddings" but this was not implemented. The embeddings are computed fresh each call using PyTorch's `nn.Embedding` layers, which provide efficient lookups without additional caching.
 
 ### 2. Index-Based Expert Dispatch (`hive_zero_core/hive_mind.py`)
 
 **Problem:**
 - Expert execution used string comparisons (`if expert.name == "Cartographer"`) in a hot loop
 - String comparisons are slower than integer comparisons
+- Expert ordering could be changed accidentally without detection
 
 **Solution:**
 - Replaced string comparisons with index-based dispatch
 - Uses expert index directly: `if idx == 0:  # Cartographer`
+- Added validation at initialization to ensure expert order matches expected names
 
 **Impact:**
-- Faster expert routing in forward pass
+- Faster expert routing in forward pass (O(1) integer comparison vs O(n) string comparison)
 - More maintainable code with clear expert ordering
+- Fails fast if expert ordering is changed incorrectly
 
-**Performance Gain:**
-- String comparison: O(n) where n is string length
-- Integer comparison: O(1)
-- Estimated 2-3x faster for expert dispatch logic
+**Code Changes:**
+```python
+# Validation added at init:
+expected_names = ["Cartographer", "DeepScope", "Chronos", ...]
+for idx, (expert, expected_name) in enumerate(zip(self.experts, expected_names)):
+    if expert.name != expected_name:
+        raise ValueError(f"Expert at index {idx} has name '{expert.name}' but expected '{expected_name}'")
+
+# In forward():
+if idx == 0:  # Cartographer - validated at init
+    out = expert(data.x, context=data.edge_index)
+```
 
 ### 3. Agent_Tarpit Trap Caching (`hive_zero_core/agents/defense_experts.py`)
 
@@ -63,14 +77,15 @@ for i in range(num_nodes):
 - Each trap involved expensive mathematical operations (chaos dynamics, fractals, etc.)
 
 **Solution:**
-- Added trap template caching mechanism
-- Cache is reused across forward passes with same batch size
-- Only regenerates when batch size changes
+- Added trap template caching mechanism with device awareness
+- Cache validates both batch size and device compatibility
+- **Cache only enabled in eval mode** to preserve training randomness
+- Avoids redundant computation of expensive mathematical operations during inference
 
 **Impact:**
-- **8.65x speedup** measured in tests (1.31ms → 0.15ms)
-- Significant reduction in redundant computations
-- Maintains mathematical properties while improving performance
+- **7.93x speedup** measured in tests (1.28ms → 0.16ms) for eval mode
+- Maintains training variability by disabling cache during training
+- Significant reduction in redundant computations for inference
 
 **Code Changes:**
 ```python
@@ -81,10 +96,21 @@ class Agent_Tarpit(BaseExpert):
         self._cache_batch_size = None
     
     def _generate_trap_templates(self, batch_size, device):
-        if self._trap_cache is not None and self._cache_batch_size == batch_size:
-            return self._trap_cache.to(device)
-        # Generate and cache...
+        # Only use cache in eval mode to preserve training randomness
+        use_cache = not self.training
+        
+        if (use_cache and self._trap_cache is not None and 
+            self._cache_batch_size == batch_size and 
+            self._trap_cache.device == device):
+            return self._trap_cache
+        
+        # Generate traps...
+        if use_cache:
+            self._trap_cache = trap_stack.detach()
+            self._cache_batch_size = batch_size
 ```
+
+**Note:** Cache is automatically disabled during training to maintain randomness and variability in trap generation, which is important for learning diverse defensive strategies.
 
 ### 4. Agent_Mutator Optimization (`hive_zero_core/agents/attack_experts.py`)
 

@@ -106,34 +106,37 @@ class LogEncoder(nn.Module):
         # Vectorized batch processing for better performance
         num_nodes = self.next_idx
         
+        # Get device from module parameters
+        device = self.ip_projection.weight.device
+        
         if num_nodes == 0:
              return Data(
-                x=torch.zeros((0, self.node_feature_dim)),
-                edge_index=torch.empty((2, 0), dtype=torch.long),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2))
+                x=torch.zeros((0, self.node_feature_dim), device=device),
+                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device)
             )
         
         # Vectorized IP to bits conversion using list comprehension and stack
         # This is more efficient than loop-based tensor assignment
         x_raw_list = [self._ip_to_bits(self.idx_to_ip[i]) for i in range(num_nodes)]
-        x_tensor = torch.stack(x_raw_list) # [num_nodes, 32]
+        x_tensor = torch.stack(x_raw_list).to(device) # [num_nodes, 32]
         
         x_embedded = self.ip_projection(x_tensor) # [num_nodes, node_feature_dim]
 
         # Create Edge Index Tensor
-        edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long)
+        edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long, device=device)
 
         # Create Edge Attributes Tensor - vectorized for better performance
         if edge_attr_inputs:
             ports_list, protos_list = zip(*edge_attr_inputs)
-            ports = torch.tensor(ports_list, dtype=torch.long)
-            protos = torch.tensor(protos_list, dtype=torch.long)
+            ports = torch.tensor(ports_list, dtype=torch.long, device=device)
+            protos = torch.tensor(protos_list, dtype=torch.long, device=device)
 
             port_embeds = self.port_embedding(ports) # [num_edges, edge_feature_dim]
             proto_embeds = self.proto_embedding(protos) # [num_edges, edge_feature_dim]
 
             edge_attr = torch.cat([port_embeds, proto_embeds], dim=1) # [num_edges, edge_feature_dim * 2]
         else:
-            edge_attr = torch.empty((0, self.edge_feature_dim * 2))
+            edge_attr = torch.empty((0, self.edge_feature_dim * 2), device=device)
 
         return Data(x=x_embedded, edge_index=edge_index, edge_attr=edge_attr)
