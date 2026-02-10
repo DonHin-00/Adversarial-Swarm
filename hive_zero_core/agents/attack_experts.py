@@ -44,7 +44,7 @@ class SentinelAgent(BaseExpert):
                  # Already valid token embeddings, use directly
                  outputs = self.backbone(inputs_embeds=x)
              else:
-                 raise ValueError(f"Unexpected input dimension {x.shape[-1]}. Expected {self.observation_dim} (observation_dim) or {self.backbone.config.hidden_size} (backbone.hidden_size)")
+                 raise ValueError(f"Unexpected input dimension {x.shape[-1]}. Expected {self.observation_dim} (observation_dim) or {self.backbone.config.hidden_size} (hidden_size)")
         else:
              outputs = self.backbone(input_ids=x.long())
 

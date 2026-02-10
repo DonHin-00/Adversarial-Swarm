@@ -69,13 +69,16 @@ class BaseExpert(nn.Module, ABC):
             return self._forward_impl(x, context, mask)
         except Exception as e:
             self.logger.error(f"Error in {self.name} forward_ungated pass: {str(e)}")
-            # Fail gracefully
+            # Fail gracefully - determine device from input
+            device = torch.device('cpu')  # Default fallback
             if isinstance(x, torch.Tensor):
-                 return torch.zeros((x.size(0), self.action_dim), device=x.device)
+                device = x.device
+                return torch.zeros((x.size(0), self.action_dim), device=device)
             elif isinstance(x, HeteroData):
                  if 'ip' in x:
-                     return torch.zeros((x['ip'].x.size(0), self.action_dim), device=x['ip'].x.device)
-            return torch.zeros((0, self.action_dim)) # Fallback
+                     device = x['ip'].x.device
+                     return torch.zeros((x['ip'].x.size(0), self.action_dim), device=device)
+            return torch.zeros((0, self.action_dim), device=device)
 
     @abstractmethod
     def _forward_impl(self, x: Union[torch.Tensor, HeteroData], context: Optional[torch.Tensor], mask: Optional[torch.Tensor]) -> torch.Tensor:
