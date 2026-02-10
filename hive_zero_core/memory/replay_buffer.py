@@ -1,6 +1,8 @@
-import torch
+from typing import Any, List, Tuple, Union
+
 import numpy as np
-from typing import List, Any, Tuple, Union
+import torch
+
 
 class PrioritizedReplayBuffer:
     """
@@ -9,6 +11,7 @@ class PrioritizedReplayBuffer:
     Stores and samples transitions based on their temporal difference (TD) error
     to improve training efficiency in sparse reward environments.
     """
+
     def __init__(self, capacity: int = 10000, alpha: float = 0.6):
         """
         Args:
@@ -35,7 +38,9 @@ class PrioritizedReplayBuffer:
         self.pos = (self.pos + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
 
-    def sample(self, batch_size: int, beta: float = 0.4) -> Tuple[List[Tuple], np.ndarray, torch.Tensor]:
+    def sample(
+        self, batch_size: int, beta: float = 0.4
+    ) -> Tuple[List[Tuple], np.ndarray, torch.Tensor]:
         """
         Samples a batch of transitions.
 
@@ -62,7 +67,7 @@ class PrioritizedReplayBuffer:
         # Sample only from valid entries (0 to current_size-1)
         indices = np.random.choice(current_size, batch_size, p=probs)
         samples = [self.buffer[idx] for idx in indices]
-        
+
         # Validate all samples are non-None (critical for buffer integrity)
         if any(s is None for s in samples):
             raise RuntimeError(
@@ -73,16 +78,18 @@ class PrioritizedReplayBuffer:
         # Importance Sampling (IS) weights to correct for bias
         # w_i = (1/N * 1/P(i))^beta
         weights = (current_size * probs[indices]) ** (-beta)
-        weights /= weights.max() # Normalize weights
+        weights /= weights.max()  # Normalize weights
 
         return samples, indices, torch.tensor(weights, dtype=torch.float32)
 
-    def update_priorities(self, indices: Union[List[int], np.ndarray], priorities: Union[List[float], np.ndarray]):
+    def update_priorities(
+        self, indices: Union[List[int], np.ndarray], priorities: Union[List[float], np.ndarray]
+    ):
         """
         Updates priorities for sampled transitions after a training step.
         """
         for idx, prio in zip(indices, priorities):
-            self.priorities[idx] = prio + 1e-6 # Add epsilon to avoid zero priority
+            self.priorities[idx] = prio + 1e-6  # Add epsilon to avoid zero priority
 
     def __len__(self) -> int:
         return self.size

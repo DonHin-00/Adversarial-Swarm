@@ -1,6 +1,8 @@
+from typing import Optional
+
 import torch
 import torch.nn.functional as F
-from typing import Optional
+
 
 class CompositeReward:
     """
@@ -11,6 +13,7 @@ class CompositeReward:
         - Information Gain (Graph Entropy Reduction)
         - Stealth (Traffic Mimicry)
     """
+
     def __init__(self, w_adv: float = 1.0, w_info: float = 0.5, w_stealth: float = 0.8):
         self.w_adv = w_adv
         self.w_info = w_info
@@ -30,7 +33,7 @@ class CompositeReward:
         Note:
             This function assumes dist contains non-negative values. Negative values
             will be clamped to epsilon, which may not reflect the intended distribution.
-            
+
             Two-step clamping strategy:
             1. Clamp individual values to prevent log(0) in KL divergence
             2. Clamp sum to prevent division by zero when normalizing
@@ -61,7 +64,9 @@ class CompositeReward:
         gain = prev_entropy - current_entropy
         return float(max(0.0, gain))
 
-    def calculate_stealth_reward(self, traffic_dist: torch.Tensor, baseline_dist: torch.Tensor) -> torch.Tensor:
+    def calculate_stealth_reward(
+        self, traffic_dist: torch.Tensor, baseline_dist: torch.Tensor
+    ) -> torch.Tensor:
         """
         R_stealth: Minimize KL Divergence between generated traffic and baseline.
 
@@ -77,12 +82,16 @@ class CompositeReward:
         baseline_dist_norm = self._renormalize_distribution(baseline_dist)
 
         # Maximize negative KL (minimize divergence)
-        kl = F.kl_div(traffic_dist_norm.log(), baseline_dist_norm, reduction='batchmean')
+        kl = F.kl_div(traffic_dist_norm.log(), baseline_dist_norm, reduction="batchmean")
         return -kl
 
-    def compute(self, adv_score: torch.Tensor, info_gain: float,
-                traffic_dist: Optional[torch.Tensor] = None,
-                baseline_dist: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def compute(
+        self,
+        adv_score: torch.Tensor,
+        info_gain: float,
+        traffic_dist: Optional[torch.Tensor] = None,
+        baseline_dist: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         Computes the final composite reward.
         """
