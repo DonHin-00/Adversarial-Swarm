@@ -14,8 +14,8 @@ class BaseExpert(nn.Module, ABC):
         self.name = name
         self.logger = setup_logger(f"Expert_{name}")
 
-        # Gating Logic
-        self.is_active = False
+        # Gating Logic - default to active for standalone usage
+        self.is_active = True
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name='{self.name}', obs_dim={self.observation_dim}, action_dim={self.action_dim})"

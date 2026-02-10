@@ -49,8 +49,11 @@ class MimicAgent(BaseExpert):
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if context is None:
             context = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
+        
+        # Ensure context is within valid embedding range [0, 255]
+        context_clamped = torch.clamp(context, 0, 255)
 
-        proto_emb = self.proto_embedding(context.squeeze(-1) if context.dim() > 1 else context)
+        proto_emb = self.proto_embedding(context_clamped.squeeze(-1) if context_clamped.dim() > 1 else context_clamped)
 
         # 1. Encode to Latent
         enc_in = torch.cat([x, proto_emb], dim=1)
@@ -108,19 +111,32 @@ class StegoAgent(BaseExpert):
         encoded_msg = torch.tanh(self.payload_encoder(x))
 
         if context is not None and context.dim() == 4:
-             cover = context.squeeze(1)
-             dct_coeffs = torch.fft.rfft2(cover, norm='ortho')
+            try:
+                cover = context.squeeze(1)
+                dct_coeffs = torch.fft.rfft2(cover, norm='ortho')
 
-             # Injection into mid-frequency components
-             B, H, W_half = dct_coeffs.shape
-             flat_dct = dct_coeffs.view(B, -1)
+                # Injection into mid-frequency components
+                B, H, W_half = dct_coeffs.shape
+                flat_dct = dct_coeffs.view(B, -1)
 
-             if flat_dct.size(1) > 64:
-                 # Real/Imaginary injection
-                 flat_dct[:, 5:69] += encoded_msg * 0.05 + 1j * (encoded_msg * 0.05)
+                if flat_dct.size(1) > 64:
+                    # Real/Imaginary injection with bounds checking
+                    end_idx = min(69, flat_dct.size(1))
+                    injection_size = end_idx - 5
+                    if injection_size > 0:
+                        # Truncate or pad encoded_msg to match injection size
+                        if encoded_msg.size(1) > injection_size:
+                            msg_to_inject = encoded_msg[:, :injection_size]
+                        else:
+                            msg_to_inject = F.pad(encoded_msg, (0, injection_size - encoded_msg.size(1)))
+                        flat_dct[:, 5:end_idx] += msg_to_inject * 0.05 + 1j * (msg_to_inject * 0.05)
 
-             stego_img = torch.fft.irfft2(flat_dct.view(B, H, W_half), s=cover.shape[-2:], norm='ortho')
-             return stego_img.unsqueeze(1)
+                stego_img = torch.fft.irfft2(flat_dct.view(B, H, W_half), s=cover.shape[-2:], norm='ortho')
+                return stego_img.unsqueeze(1)
+            except Exception as e:
+                # Fallback: return cover image unchanged if steganography fails
+                self.logger.error(f"Steganography failed ({type(e).__name__}): {e}, returning cover unchanged")
+                return context
 
         return encoded_msg
 
@@ -142,6 +158,9 @@ class CleanerAgent(BaseExpert):
             nn.ReLU(),
             nn.Linear(hidden_dim, observation_dim)
         )
+        
+        # Initialize verification score
+        self.last_verified_score = None
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # x: Action History [batch, seq, obs]

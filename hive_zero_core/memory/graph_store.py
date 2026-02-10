@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch_geometric.data import HeteroData
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Union
 import ipaddress
 import hashlib
 
@@ -31,14 +31,42 @@ class HeteroLogEncoder(nn.Module):
         return mapping[key]
 
     def _ip_to_tensor(self, ip_str: str) -> torch.Tensor:
+        """Convert IP address string to binary tensor representation.
+        
+        Args:
+            ip_str: IPv4 address string (e.g., '192.168.1.1')
+            
+        Returns:
+            32-dimensional binary tensor representation, or zeros if invalid
+        """
         try:
             ip_int = int(ipaddress.IPv4Address(ip_str))
             bits = [float(x) for x in format(ip_int, '032b')]
             return torch.tensor(bits, dtype=torch.float32)
-        except:
+        except (ValueError, ipaddress.AddressValueError):
+            # Return zero tensor for invalid IP addresses
             return torch.zeros(32, dtype=torch.float32)
 
     def update(self, logs: List[Dict]) -> HeteroData:
+        """Update the heterogeneous graph with new log entries.
+        
+        Args:
+            logs: List of log dictionaries with keys: 'src_ip', 'dst_ip', 'port', 'proto'
+            
+        Returns:
+            HeteroData object representing the network graph
+        """
+        if not logs:
+            # Return empty graph for empty input
+            data = HeteroData()
+            data['ip'].x = torch.zeros(0, self.node_embed_dim)
+            data['port'].x = torch.zeros(0, self.node_embed_dim)
+            data['protocol'].x = torch.zeros(0, self.node_embed_dim)
+            data['ip', 'flow', 'ip'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['ip', 'binds', 'port'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['port', 'uses', 'protocol'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            return data
+            
         data = HeteroData()
 
         # Lists for edges
@@ -63,10 +91,23 @@ class HeteroLogEncoder(nn.Module):
         local_proto_map = {}
 
         for log in logs:
+            # Validate and extract log fields with defaults
             src_ip = log.get('src_ip', '0.0.0.0')
             dst_ip = log.get('dst_ip', '0.0.0.0')
-            dport = int(log.get('port', 0))
-            proto = int(log.get('proto', 6))
+            
+            # Validate port is within valid range (0-65535)
+            try:
+                port_val = int(log.get('port', 0))
+                dport = max(0, min(65535, port_val))  # Clamp to valid range
+            except (ValueError, TypeError):
+                dport = 0
+            
+            # Validate protocol is within valid range (0-255)
+            try:
+                proto_val = int(log.get('proto', 6))  # Default to TCP (6)
+                proto = max(0, min(255, proto_val))  # Clamp to valid range
+            except (ValueError, TypeError):
+                proto = 6
 
             s_idx = self._get_idx(src_ip, local_ip_map)
             d_idx = self._get_idx(dst_ip, local_ip_map)
