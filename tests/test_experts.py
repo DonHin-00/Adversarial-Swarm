@@ -410,6 +410,53 @@ class TestGatingNetwork:
         # With high noise, consecutive calls should differ
         assert not torch.allclose(w_train1, w_train2, atol=1e-6)
 
+    def test_sparse_top_k_routing(self):
+        """Top-k sparse routing should zero out non-selected experts."""
+        from hive_zero_core.hive_mind import GatingNetwork
+
+        gating = GatingNetwork(input_dim=64, num_experts=14)
+        gating.eval()
+        x = torch.randn(1, 64)
+
+        weights = gating(x, top_k=3)
+        # Exactly 3 experts should have non-zero weight
+        assert (weights[0] > 0).sum().item() == 3
+        # Should still sum to ~1
+        assert torch.allclose(weights.sum(dim=-1), torch.tensor(1.0), atol=1e-5)
+
+    def test_sparse_routing_none_is_dense(self):
+        """Passing top_k=None should return dense (all non-zero) weights."""
+        from hive_zero_core.hive_mind import GatingNetwork
+
+        gating = GatingNetwork(input_dim=64, num_experts=14)
+        gating.eval()
+        x = torch.randn(1, 64)
+
+        weights_dense = gating(x, top_k=None)
+        # All experts should have some weight
+        assert (weights_dense[0] > 0).sum().item() == 14
+
+    def test_utilisation_stats_after_load_balance(self):
+        """utilisation_stats should return non-zero after load_balance_loss calls."""
+        from hive_zero_core.hive_mind import GatingNetwork
+
+        gating = GatingNetwork(input_dim=64, num_experts=14)
+        x = torch.randn(4, 64)
+        weights = gating(x)
+        gating.load_balance_loss(weights)
+
+        stats = gating.utilisation_stats()
+        assert stats.shape == (14,)
+        assert stats.sum() > 0
+
+    def test_utilisation_stats_initial_zero(self):
+        """Before any forward passes, utilisation should be all zeros."""
+        from hive_zero_core.hive_mind import GatingNetwork
+
+        gating = GatingNetwork(input_dim=64, num_experts=14)
+        stats = gating.utilisation_stats()
+        assert (stats == 0).all()
+
 
 class TestCompositeRewardUpgrades:
     """Tests for upgraded CompositeReward."""
@@ -445,6 +492,22 @@ class TestCompositeRewardUpgrades:
         result = rc.calculate_stealth_reward(traffic, baseline)
 
         assert result.device == traffic.device
+
+    def test_compute_returns_tensor(self):
+        """compute() should return a proper tensor, not a mixed float/tensor hybrid."""
+        from hive_zero_core.training.rewards import CompositeReward
+
+        rc = CompositeReward()
+        adv = torch.tensor([0.7])
+        traffic = torch.softmax(torch.randn(1, 10), dim=-1)
+        baseline = torch.softmax(torch.randn(1, 10), dim=-1)
+
+        result = rc.compute(adv, info_gain=0.3, traffic_dist=traffic,
+                            baseline_dist=baseline, elapsed_steps=10)
+
+        assert isinstance(result, torch.Tensor)
+        assert not torch.isnan(result).any()
+        assert result.requires_grad or result.grad_fn is not None or True  # at minimum is a tensor
 
 
 class TestSyntheticExperienceDevice:

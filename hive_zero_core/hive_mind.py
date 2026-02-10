@@ -44,10 +44,13 @@ class GatingNetwork(nn.Module):
         )
         self._total_routes: int = 0
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, top_k: Optional[int] = None) -> torch.Tensor:
         """
         Args:
             x: Global state embedding [batch, input_dim].
+            top_k: If set, applies top-k sparse routing — only the top_k
+                   experts receive non-zero weight while preserving gradients
+                   through a straight-through estimator.
 
         Returns:
             Normalised expert weights [batch, num_experts].
@@ -59,6 +62,17 @@ class GatingNetwork(nn.Module):
             logits = logits + torch.randn_like(logits) * self.noise_std
 
         weights = F.softmax(logits, dim=-1)
+
+        # Top-k sparse routing with straight-through gradient
+        if top_k is not None and 0 < top_k < self.num_experts:
+            topk_vals, topk_idx = torch.topk(weights, k=top_k, dim=-1)
+            sparse = torch.zeros_like(weights)
+            sparse.scatter_(1, topk_idx, topk_vals)
+            # Re-normalise the sparse weights
+            sparse = sparse / (sparse.sum(dim=-1, keepdim=True) + 1e-8)
+            # Straight-through: forward uses sparse, backward uses dense
+            weights = weights + (sparse - weights).detach()
+
         return weights
 
     def load_balance_loss(self, weights: torch.Tensor) -> torch.Tensor:
@@ -66,7 +80,8 @@ class GatingNetwork(nn.Module):
         Auxiliary loss that penalises uneven expert utilisation.
 
         Computes the coefficient of variation of mean routing weights across
-        experts. A perfectly balanced router yields CV ≈ 0.
+        experts. A perfectly balanced router yields CV ≈ 0.  Also updates
+        the running ``_expert_counts`` buffer for diagnostics.
 
         Args:
             weights: Expert weights [batch, num_experts] from the last forward.
@@ -75,8 +90,21 @@ class GatingNetwork(nn.Module):
             Scalar loss tensor.
         """
         mean_weights = weights.mean(dim=0)  # [num_experts]
+
+        # Update running utilisation counts
+        with torch.no_grad():
+            self._expert_counts += mean_weights.detach()
+            self._total_routes += 1
+
         cv = mean_weights.std() / (mean_weights.mean() + 1e-8)
         return cv
+
+    @torch.no_grad()
+    def utilisation_stats(self) -> torch.Tensor:
+        """Return normalised per-expert utilisation over training so far."""
+        if self._total_routes == 0:
+            return torch.zeros(self.num_experts)
+        return self._expert_counts / self._total_routes
 
 class HiveMind(nn.Module):
     def __init__(self, observation_dim: int = 64, pretrained: bool = False):
@@ -180,7 +208,11 @@ class HiveMind(nn.Module):
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> Dict[str, Any]:
         """
-        Main Forward Pass with fixed Quad-Strike Logic.
+        Main Forward Pass with fixed Quad-Strike Logic and sparse gating.
+
+        The gating network produces top-k sparse weights with straight-through
+        gradient estimation, ensuring only the selected experts receive
+        gradient signal while keeping the full softmax differentiable.
 
         Args:
             raw_logs: List of dicts with keys 'src_ip', 'dst_ip', 'port', 'proto'.
@@ -195,13 +227,13 @@ class HiveMind(nn.Module):
         data = self.log_encoder.update(raw_logs)
         global_state = self.compute_global_state(data)
 
-        weights = self.gating_network(global_state)
-
-        # Clamp top_k to number of experts to prevent out-of-bounds
-        num_experts = weights.shape[-1]
+        # Sparse gating: top-k straight-through routing
+        num_experts = len(self.experts)
         effective_k = max(1, min(top_k, num_experts))
-        top_k_vals, top_k_indices = torch.topk(weights, k=effective_k, dim=-1)
-        active_indices = top_k_indices[0].tolist()
+        weights = self.gating_network(global_state, top_k=effective_k)
+
+        # Determine which experts have non-zero routing weight
+        active_indices = (weights[0] > 0).nonzero(as_tuple=True)[0].tolist()
 
         # SYNERGY LOGIC: Force-Enable Kill Chain using name-based lookup
         # instead of hardcoded indices to prevent breakage if expert order changes
@@ -326,14 +358,17 @@ class HiveMind(nn.Module):
     @torch.no_grad()
     def evolve_threat_intel(self, results: Dict[str, Any]):
         """
-        Feed forward-pass results into the ThreatIntelDB to drive
-        red/blue co-evolution.
+        Feed forward-pass results into the ThreatIntelDB and update
+        blue-team detectors to drive red/blue co-evolution.
 
         The database records:
         * **successful evasions** — payloads that the blue-team stack
           scored as "Allowed" (attack bank, for red-team imitation).
         * **caught payloads** — payloads that triggered at least one
           detector (defense bank, for blue-team pattern learning).
+
+        Additionally, caught payloads are fed into the WAF signature bank
+        so the WAF continuously learns from new attack patterns.
 
         Should be called after every ``forward()`` during training.
         """
@@ -372,6 +407,10 @@ class HiveMind(nn.Module):
             self.threat_intel.record_attack_success(payload_flat[evaded])
         if caught.any():
             self.threat_intel.record_attack_failure(payload_flat[caught])
+            # Feed caught payloads into WAF signature bank for continuous
+            # adaptation — WAF learns from every new attack pattern it sees.
+            caught_encoded = self.expert_waf.encoder(payload_flat[caught])
+            self.expert_waf.update_signatures(caught_encoded)
 
         evasion_rate = float(evaded.float().mean().item())
         self.threat_intel.step_generation(evasion_rate)

@@ -46,6 +46,12 @@ class LogEncoder(nn.Module):
             self.next_idx += 1
         return self.ip_to_idx[ip]
 
+    def reset(self):
+        """Clear the IP-to-index mapping to free memory between episodes."""
+        self.ip_to_idx.clear()
+        self.idx_to_ip.clear()
+        self.next_idx = 0
+
     def update(self, logs: List[Dict]) -> Data:
         """
         Converts a list of raw log dictionaries into a PyG Data object.
@@ -60,12 +66,12 @@ class LogEncoder(nn.Module):
             - edge_attr: Edge features [num_edges, edge_feature_dim * 2]
         """
         if not logs:
-            # Return empty graph with correct feature dimensions
-            # Even with 0 nodes, feature dim must match expectation
+            # Return empty graph on the module's device
+            device = self.ip_projection.weight.device
             return Data(
-                x=torch.zeros((0, self.node_feature_dim)),
-                edge_index=torch.empty((2, 0), dtype=torch.long),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2))
+                x=torch.zeros((0, self.node_feature_dim), device=device),
+                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device),
             )
 
         src_indices = []
@@ -111,10 +117,11 @@ class LogEncoder(nn.Module):
             x_raw_list.append(self._ip_to_bits(ip_str))
 
         if not x_raw_list:
-             return Data(
-                x=torch.zeros((0, self.node_feature_dim)),
-                edge_index=torch.empty((2, 0), dtype=torch.long),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2))
+            device = self.ip_projection.weight.device
+            return Data(
+                x=torch.zeros((0, self.node_feature_dim), device=device),
+                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device),
             )
 
         x_tensor = torch.stack(x_raw_list) # [num_nodes, 32]

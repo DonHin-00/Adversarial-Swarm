@@ -81,15 +81,22 @@ class CompositeReward:
     def compute(self, adv_score: torch.Tensor, info_gain: float,
                 traffic_dist: torch.Tensor, baseline_dist: torch.Tensor,
                 elapsed_steps: int = 0, step_budget: int = 100) -> torch.Tensor:
-        """Weighted sum of all reward components."""
+        """Weighted sum of all reward components.
+
+        Converts scalar float rewards to tensors on the same device as
+        ``adv_score`` before summing, ensuring clean gradient flow.
+        """
+        device = adv_score.device
+        dtype = adv_score.dtype
+
         r_adv = self.calculate_adversarial_reward(adv_score)
         r_stealth = self.calculate_stealth_reward(traffic_dist, baseline_dist)
         r_temporal = self.calculate_temporal_reward(elapsed_steps, step_budget)
 
         total = (
             self.w_adv * r_adv
-            + self.w_info * info_gain
+            + self.w_info * torch.tensor(info_gain, device=device, dtype=dtype)
             + self.w_stealth * r_stealth
-            + self.w_temporal * r_temporal
+            + self.w_temporal * torch.tensor(r_temporal, device=device, dtype=dtype)
         )
         return total

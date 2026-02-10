@@ -70,13 +70,19 @@ class ThreatIntelDB(nn.Module):
     """
 
     def __init__(self, embedding_dim: int = 128, bank_size: int = 256,
-                 ema_decay: float = 0.995, novelty_threshold: float = 0.1):
+                 ema_decay: float = 0.995, novelty_threshold: float = 0.1,
+                 novelty_warmup_gens: int = 50):
         super().__init__()
 
         self.embedding_dim = embedding_dim
         self.bank_size = bank_size
         self.ema_decay = ema_decay
         self.novelty_threshold = novelty_threshold
+        # Over the first `novelty_warmup_gens` generations, the effective
+        # novelty threshold linearly decays from 1.0 (accept everything)
+        # to `novelty_threshold`.  This ensures the bank fills quickly
+        # in early training, then becomes more selective as patterns emerge.
+        self.novelty_warmup_gens = novelty_warmup_gens
 
         # Attack bank: successful evasions the red team can draw from
         self.register_buffer(
@@ -206,6 +212,15 @@ class ThreatIntelDB(nn.Module):
     # Internals
     # ------------------------------------------------------------------
 
+    def _effective_novelty_threshold(self) -> float:
+        """Temperature-scaled novelty: starts permissive, tightens over time."""
+        gen = self.generation.item()
+        if gen >= self.novelty_warmup_gens:
+            return self.novelty_threshold
+        # Linear interpolation: 1.0 → novelty_threshold over warmup period
+        alpha = gen / max(self.novelty_warmup_gens, 1)
+        return 1.0 * (1 - alpha) + self.novelty_threshold * alpha
+
     def _ingest(self, embeddings: torch.Tensor, bank: torch.Tensor,
                 count: torch.Tensor, ptr: torch.Tensor):
         """Insert or EMA-update signatures in the given bank.
@@ -213,8 +228,13 @@ class ThreatIntelDB(nn.Module):
         Normalises the bank once up-front (and re-normalises only the
         affected rows after an update) to avoid O(N * bank_size * D)
         repeated full-bank normalisation.
+
+        Uses a temperature-scaled novelty threshold: during early training
+        (first ``novelty_warmup_gens`` generations) the threshold is relaxed
+        to fill the bank quickly, then tightens to the configured value.
         """
         bank_norm = F.normalize(bank, dim=-1)  # Normalise once
+        threshold = self._effective_novelty_threshold()
 
         for i in range(embeddings.size(0)):
             emb = embeddings[i]
@@ -224,7 +244,7 @@ class ThreatIntelDB(nn.Module):
             cos_sim = torch.matmul(emb_norm, bank_norm.t()).squeeze(0)
             max_sim, max_idx = cos_sim.max(dim=0)
 
-            if max_sim.item() > (1.0 - self.novelty_threshold):
+            if max_sim.item() > (1.0 - threshold):
                 # Close match exists → EMA update
                 bank[max_idx] = (
                     self.ema_decay * bank[max_idx]

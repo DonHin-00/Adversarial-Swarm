@@ -54,6 +54,7 @@ def train_hive_mind_adversarial(
     blue_params = []
     for expert in hive.experts:
         if expert.name in ("Cartographer", "DeepScope", "Chronos",
+                           "Sentinel", "PayloadGen", "Mutator",
                            "Mimic", "Ghost", "Stego", "Cleaner",
                            "Tarpit", "FeedbackLoop", "Flashbang", "GlassHouse",
                            "PreAttackBooster"):
@@ -128,7 +129,7 @@ def train_hive_mind_adversarial(
         with torch.no_grad():
             data = hive.log_encoder.update(mock_logs)
             gs = hive.compute_global_state(data)
-        weights = hive.gating_network(gs)
+        weights = hive.gating_network(gs, top_k=top_k)
         red_loss = red_loss + balance_weight * hive.gating_network.load_balance_loss(weights)
 
         if red_loss.requires_grad:

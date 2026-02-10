@@ -57,6 +57,29 @@ class TestLogEncoder:
         # Proto out of range should fall back to TCP (6)
         assert data.edge_index.shape == (2, 1)
 
+    def test_reset_clears_state(self):
+        """LogEncoder.reset() should clear the IP mapping for bounded memory."""
+        from hive_zero_core.memory.graph_store import LogEncoder
+
+        encoder = LogEncoder(node_feature_dim=64)
+        logs = [{"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6}]
+        encoder.update(logs)
+        assert encoder.next_idx == 2  # Two IPs registered
+
+        encoder.reset()
+        assert encoder.next_idx == 0
+        assert len(encoder.ip_to_idx) == 0
+        assert len(encoder.idx_to_ip) == 0
+
+    def test_empty_graph_device_consistency(self):
+        """Empty-graph returns should be on the module's device."""
+        from hive_zero_core.memory.graph_store import LogEncoder
+
+        encoder = LogEncoder(node_feature_dim=64)
+        data = encoder.update([])
+        # Should be on same device as ip_projection weight (CPU by default)
+        assert data.x.device == encoder.ip_projection.weight.device
+
 
 class TestSyntheticExperienceGenerator:
     """Tests for foundation.SyntheticExperienceGenerator."""

@@ -276,6 +276,34 @@ class TestThreatIntelDB:
         # Should not have filled all 8 slots with near-identical entries
         assert stats["attack_bank_fill"] < 8
 
+    def test_warmup_novelty_threshold(self):
+        """During warmup, the effective novelty threshold should be higher (more permissive)."""
+        from hive_zero_core.memory.threat_intel_db import ThreatIntelDB
+
+        db = ThreatIntelDB(embedding_dim=16, bank_size=8,
+                           novelty_threshold=0.1, novelty_warmup_gens=100)
+
+        # At generation 0, effective threshold should be 1.0 (accept everything)
+        assert db._effective_novelty_threshold() == 1.0
+
+        # Advance halfway through warmup
+        for _ in range(50):
+            db.step_generation(0.5)
+        thresh_mid = db._effective_novelty_threshold()
+        assert 0.1 < thresh_mid < 1.0
+
+        # After warmup completes, threshold should equal configured value
+        for _ in range(50):
+            db.step_generation(0.5)
+        assert abs(db._effective_novelty_threshold() - 0.1) < 1e-6
+
+    def test_warmup_default_50_gens(self):
+        """Default warmup period is 50 generations."""
+        from hive_zero_core.memory.threat_intel_db import ThreatIntelDB
+
+        db = ThreatIntelDB(embedding_dim=16)
+        assert db.novelty_warmup_gens == 50
+
 
 # ======================================================================
 # Integration: GatingNetwork with new expert count

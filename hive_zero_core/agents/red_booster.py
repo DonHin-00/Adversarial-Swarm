@@ -130,6 +130,10 @@ class Agent_PreAttackBooster(BaseExpert):
             2. Sum detection losses → total_detect.
             3. Add semantic anchor loss: ‖payload − original‖².
             4. Step payload in the negative-gradient direction.
+
+        Dimension matching: blue detectors expect [B, observation_dim]
+        inputs, so the payload is projected to observation_dim before
+        being passed to each detector.
         """
         refined = payload.clone().detach().requires_grad_(True)
         original_anchor = self.residual_proj(original).detach()
@@ -142,9 +146,17 @@ class Agent_PreAttackBooster(BaseExpert):
 
             for detector in self._blue_detectors:
                 try:
-                    logits = detector.model(
-                        inputs_embeds=refined.unsqueeze(1)
-                    ).logits if hasattr(detector, 'model') else detector(refined)
+                    # Ensure the payload matches the detector's expected input dim
+                    detector_input = self.ensure_dimension(
+                        refined, detector.observation_dim
+                    )
+
+                    if hasattr(detector, 'model'):
+                        logits = detector.model(
+                            inputs_embeds=detector_input.unsqueeze(1)
+                        ).logits
+                    else:
+                        logits = detector(detector_input)
 
                     # P(Blocked) is index 0; maximise P(Allowed) = minimise P(Blocked)
                     if logits.dim() >= 2 and logits.size(-1) >= 2:
