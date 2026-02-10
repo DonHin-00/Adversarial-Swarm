@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  adversarial-swarm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: adversarial-swarm:latest
+    container_name: adversarial-swarm
+    volumes:
+      - ./hive_zero_core:/app/hive_zero_core
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python -c "import hive_zero_core; print('Adversarial Swarm is ready!')"
+
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: adversarial-swarm:dev
+    container_name: adversarial-swarm-dev
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: /bin/bash
+    stdin_open: true
+    tty: true

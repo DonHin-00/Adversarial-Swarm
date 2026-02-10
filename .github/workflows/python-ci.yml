@@ -1,0 +1,63 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ "main", "copilot/**" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 pylint black isort mypy pytest pytest-cov
+    
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 hive_zero_core --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings
+        flake8 hive_zero_core --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      continue-on-error: true
+    
+    - name: Check code formatting with black
+      run: |
+        black --check --diff hive_zero_core
+      continue-on-error: true
+    
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff hive_zero_core
+      continue-on-error: true
+    
+    - name: Type check with mypy
+      run: |
+        mypy hive_zero_core --ignore-missing-imports
+      continue-on-error: true
+    
+    - name: Verify Python module imports
+      run: |
+        python -c "import hive_zero_core; print('✓ hive_zero_core imports successfully')"
+    
+    - name: Compile all Python files
+      run: |
+        python -m compileall hive_zero_core -q

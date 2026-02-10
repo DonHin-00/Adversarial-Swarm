@@ -1,28 +1,42 @@
+from typing import Dict, Optional, Tuple
+
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from typing import Optional, Dict, Tuple
-from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
+import torch.optim as optim
+from transformers import AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer
+
 from hive_zero_core.agents.base_expert import BaseExpert
+
 
 class Agent_Sentinel(BaseExpert):
     """
     Expert 6: The Discriminator (BERT Classifier)
     Classifies payloads as Blocked (0) or Allowed (1).
     """
-    def __init__(self, observation_dim: int, action_dim: int, model_name: str = "prajjwal1/bert-tiny", hidden_dim: int = 64):
+
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        model_name: str = "prajjwal1/bert-tiny",
+        hidden_dim: int = 64,
+    ):
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
         self.model_name = model_name
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                model_name, num_labels=2
+            )
         except Exception as e:
             self.logger.error(f"Failed to load Sentinel model {model_name}: {e}")
             raise e
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         # Dynamic Shape Adapter: Ensure input fits BERT constraints
         # BERT expects [Batch, SeqLen] of Long integers (Token IDs) OR [Batch, SeqLen, EmbDim]
 
@@ -67,12 +81,20 @@ class Agent_Sentinel(BaseExpert):
 
         return outputs.logits
 
+
 class Agent_PayloadGen(BaseExpert):
     """
     Expert 4: Payload Generator (Seq2Seq)
     Generates raw exploit strings from vulnerability context.
     """
-    def __init__(self, observation_dim: int, action_dim: int, model_name: str = "t5-small", hidden_dim: int = 64):
+
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        model_name: str = "t5-small",
+        hidden_dim: int = 64,
+    ):
         super().__init__(observation_dim, action_dim, name="PayloadGen", hidden_dim=hidden_dim)
         self.model_name = model_name
 
@@ -83,7 +105,9 @@ class Agent_PayloadGen(BaseExpert):
             self.logger.error(f"Failed to load PayloadGen model {model_name}: {e}")
             raise e
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         # Input x: encoded context token IDs [batch, seq_len]
         max_len = 128
         vocab_size = self.model.config.vocab_size
@@ -103,18 +127,29 @@ class Agent_PayloadGen(BaseExpert):
         # Action dim is fixed. Pad/Truncate output to match action_dim.
         return self.ensure_dimension(outputs.float(), self.action_dim)
 
+
 class Agent_Mutator(BaseExpert):
     """
     Expert 5: Mutator (PPO / Optimizer)
     Iteratively obfuscates payload to evade Sentinel.
     """
-    def __init__(self, observation_dim: int, action_dim: int, sentinel_expert: BaseExpert, generator_expert: BaseExpert, hidden_dim: int = 64):
+
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        sentinel_expert: BaseExpert,
+        generator_expert: BaseExpert,
+        hidden_dim: int = 64,
+    ):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
 
         self.sentinel = sentinel_expert
         self.generator = generator_expert
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Inference-Time Search Loop.
         """
@@ -132,7 +167,9 @@ class Agent_Mutator(BaseExpert):
                 input_ids = x.long()
             input_ids = torch.clamp(input_ids, 0, vocab_size - 1)
 
-            initial_token_ids = self.generator.model.generate(input_ids, max_length=64, do_sample=True)
+            initial_token_ids = self.generator.model.generate(
+                input_ids, max_length=64, do_sample=True
+            )
 
         # 2. Convert to Embeddings for Optimization
         embed_layer = self.sentinel.model.get_input_embeddings()
@@ -155,7 +192,7 @@ class Agent_Mutator(BaseExpert):
         best_embeddings = current_embeddings.clone().detach()
         best_score = -1.0
 
-        k_steps = 2 # Reduced for stability in prototype
+        k_steps = 2  # Reduced for stability in prototype
 
         for i in range(k_steps):
             optimizer.zero_grad()

@@ -1,12 +1,17 @@
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional, Any, Tuple
-from abc import ABC, abstractmethod
+
 from hive_zero_core.utils.logging_config import setup_logger
 
+
 class BaseExpert(nn.Module, ABC):
-    def __init__(self, observation_dim: int, action_dim: int, name: str = "BaseExpert", hidden_dim: int = 64):
+    def __init__(
+        self, observation_dim: int, action_dim: int, name: str = "BaseExpert", hidden_dim: int = 64
+    ):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
@@ -17,7 +22,12 @@ class BaseExpert(nn.Module, ABC):
         # Gating Logic
         self.is_active = False
 
-    def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        context: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         Standardized forward pass for all experts.
         Enforces Gating Logic (Sparse MoE).
@@ -40,7 +50,9 @@ class BaseExpert(nn.Module, ABC):
             return torch.zeros((x.size(0), self.action_dim), device=x.device)
 
     @abstractmethod
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor]) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor]
+    ) -> torch.Tensor:
         pass
 
     def log_step(self, metrics: Dict[str, Any]):
@@ -64,12 +76,12 @@ class BaseExpert(nn.Module, ABC):
                 # Truncate
                 return x[:, :target_dim]
         elif x.dim() == 3:
-             # [Batch, Seq, Dim] -> Flatten or slice depending on need.
-             # For simplicity, if we need [Batch, Dim], we pool or slice.
-             # If we need [Batch, Seq, Dim], we pad dim.
-             if target_dim == x.size(-1):
-                 return x
-             # Fallback implementation for prototype stability
-             return x
+            # [Batch, Seq, Dim] -> Flatten or slice depending on need.
+            # For simplicity, if we need [Batch, Dim], we pool or slice.
+            # If we need [Batch, Seq, Dim], we pad dim.
+            if target_dim == x.size(-1):
+                return x
+            # Fallback implementation for prototype stability
+            return x
 
         return x

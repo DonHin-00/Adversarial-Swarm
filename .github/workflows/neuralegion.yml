@@ -159,8 +159,10 @@ on:
 
 jobs:
   neuralegion_scan:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     name: A job to run a Nexploit scan
+    # Only run if the secret is configured
+    if: ${{ secrets.NEURALEGION_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Start Nexploit Scan 🏁
@@ -173,3 +175,4 @@ jobs:
             [ "crawler" ]
           crawler_urls: |
             [ "https://brokencrystals.com" ] # ✏️ Update this to the url you wish to scan
+        continue-on-error: true

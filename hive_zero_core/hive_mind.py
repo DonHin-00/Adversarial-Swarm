@@ -1,23 +1,28 @@
+from typing import Any, Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple, Any
-from hive_zero_core.utils.logging_config import setup_logger
-from hive_zero_core.memory.graph_store import LogEncoder
-from hive_zero_core.memory.foundation import KnowledgeLoader, WeightInitializer
-from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepScope, Agent_Chronos
-from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
-from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
+
+from hive_zero_core.agents.attack_experts import Agent_Mutator, Agent_PayloadGen, Agent_Sentinel
 from hive_zero_core.agents.defense_experts import Agent_Tarpit
-from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
+from hive_zero_core.agents.offensive_defense import (
+    Agent_FeedbackLoop,
+    Agent_Flashbang,
+    Agent_GlassHouse,
+)
+from hive_zero_core.agents.post_experts import Agent_Cleaner, Agent_Ghost, Agent_Mimic, Agent_Stego
+from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_Chronos, Agent_DeepScope
+from hive_zero_core.memory.foundation import KnowledgeLoader, WeightInitializer
+from hive_zero_core.memory.graph_store import LogEncoder
+from hive_zero_core.utils.logging_config import setup_logger
+
 
 class GatingNetwork(nn.Module):
     def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, num_experts)
+            nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, num_experts)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -26,6 +31,7 @@ class GatingNetwork(nn.Module):
         # Softmax for weights
         weights = F.softmax(logits, dim=-1)
         return weights
+
 
 class HiveMind(nn.Module):
     def __init__(self, observation_dim: int = 64, pretrained: bool = False):
@@ -40,15 +46,20 @@ class HiveMind(nn.Module):
 
         # Cluster A: Recon
         self.expert_cartographer = Agent_Cartographer(observation_dim, action_dim=observation_dim)
-        self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10) # 10 discrete actions?
-        self.expert_chronos = Agent_Chronos(1, action_dim=1) # Time input
+        self.expert_deepscope = Agent_DeepScope(
+            observation_dim, action_dim=10
+        )  # 10 discrete actions?
+        self.expert_chronos = Agent_Chronos(1, action_dim=1)  # Time input
 
         # Cluster B: Attack
         self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
-        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128) # Seq len
-        self.expert_mutator = Agent_Mutator(observation_dim, action_dim=128,
-                                           sentinel_expert=self.expert_sentinel,
-                                           generator_expert=self.expert_payloadgen)
+        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)  # Seq len
+        self.expert_mutator = Agent_Mutator(
+            observation_dim,
+            action_dim=128,
+            sentinel_expert=self.expert_sentinel,
+            generator_expert=self.expert_payloadgen,
+        )
 
         # Cluster C: Post-Exploit
         self.expert_mimic = Agent_Mimic(observation_dim, action_dim=2)
@@ -65,22 +76,24 @@ class HiveMind(nn.Module):
         self.expert_glasshouse = Agent_GlassHouse(observation_dim, action_dim=observation_dim)
 
         # Order matters for indexing in GatingNetwork outputs
-        self.experts = nn.ModuleList([
-            self.expert_cartographer, # 0
-            self.expert_deepscope,    # 1
-            self.expert_chronos,      # 2
-            self.expert_payloadgen,   # 3
-            self.expert_mutator,      # 4
-            self.expert_sentinel,     # 5
-            self.expert_mimic,        # 6
-            self.expert_ghost,        # 7
-            self.expert_stego,        # 8
-            self.expert_cleaner,      # 9
-            self.expert_tarpit,       # 10
-            self.expert_feedback,     # 11
-            self.expert_flashbang,    # 12
-            self.expert_glasshouse    # 13
-        ])
+        self.experts = nn.ModuleList(
+            [
+                self.expert_cartographer,  # 0
+                self.expert_deepscope,  # 1
+                self.expert_chronos,  # 2
+                self.expert_payloadgen,  # 3
+                self.expert_mutator,  # 4
+                self.expert_sentinel,  # 5
+                self.expert_mimic,  # 6
+                self.expert_ghost,  # 7
+                self.expert_stego,  # 8
+                self.expert_cleaner,  # 9
+                self.expert_tarpit,  # 10
+                self.expert_feedback,  # 11
+                self.expert_flashbang,  # 12
+                self.expert_glasshouse,  # 13
+            ]
+        )
 
         # 3. Gating Mechanism
         self.gating_network = GatingNetwork(observation_dim, num_experts=len(self.experts))
@@ -117,9 +130,12 @@ class HiveMind(nn.Module):
         # SYNERGY LOGIC: Force-Enable Kill Chain
         tarpit_idx = 10
         if tarpit_idx in active_indices:
-            if 11 not in active_indices: active_indices.append(11) # Feedback
-            if 12 not in active_indices: active_indices.append(12) # Flashbang
-            if 13 not in active_indices: active_indices.append(13) # GlassHouse
+            if 11 not in active_indices:
+                active_indices.append(11)  # Feedback
+            if 12 not in active_indices:
+                active_indices.append(12)  # Flashbang
+            if 13 not in active_indices:
+                active_indices.append(13)  # GlassHouse
 
         results = {}
 
