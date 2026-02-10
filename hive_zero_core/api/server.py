@@ -45,7 +45,7 @@ allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=False,  # Disabled when using specific origins for security
+    allow_credentials=False,  # Set to False for stateless API; enable if authentication cookies are needed
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
@@ -198,7 +198,7 @@ async def execute_swarm(request: CommandRequest):
             logger.warning(f"Safety violation: {reason}")
             return {"status": "blocked", "reason": reason}
 
-        results = hive.forward(data=data, top_k=request.top_k)
+        results = hive.forward(top_k=request.top_k, data=data)
 
         formatted_results = {}
         for k, v in results.items():
