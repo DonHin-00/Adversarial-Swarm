@@ -159,14 +159,19 @@ class HiveMind(nn.Module):
 
         # 4. Projection layer for Sentinel (observation_dim -> BERT hidden_size)
         # The Sentinel's BERT backbone expects hidden_size embeddings
-        try:
-            sentinel_hidden_size = self.expert_sentinel.backbone.config.hidden_size
-            self.sentinel_projection = nn.Linear(observation_dim, sentinel_hidden_size)
-        except (AttributeError, RuntimeError) as e:
-            self.logger.warning(
-                f"Failed to create Sentinel projection layer: {e}. Using default hidden_size=128"
-            )
-            self.sentinel_projection = nn.Linear(observation_dim, 128)
+        # Only create projection if Sentinel is loaded
+        if self.expert_sentinel is not None:
+            try:
+                sentinel_hidden_size = self.expert_sentinel.backbone.config.hidden_size
+                self.sentinel_projection = nn.Linear(observation_dim, sentinel_hidden_size)
+            except (AttributeError, RuntimeError) as e:
+                self.logger.warning(
+                    f"Failed to create Sentinel projection layer: {e}. Using default hidden_size=128"
+                )
+                self.sentinel_projection = nn.Linear(observation_dim, 128)
+        else:
+            # No sentinel loaded, use None or dummy projection
+            self.sentinel_projection = None
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> HiveResults:
         """
