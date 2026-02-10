@@ -80,7 +80,17 @@ class HiveMind(nn.Module):
     concurrent forward passes are required.
     """
 
-    def __init__(self, observation_dim: int = 64):
+    def __init__(self, observation_dim: int = 64, load_hf_models: bool = True, local_files_only: bool = False):
+        """
+        Initialize HiveMind controller.
+        
+        Args:
+            observation_dim: Dimension of observation space.
+            load_hf_models: If False, defer loading of HuggingFace models (SentinelAgent, PayloadGenAgent).
+                           Set to False for offline environments or when models aren't needed.
+            local_files_only: If True, only use locally cached HuggingFace models (no network downloads).
+                             Requires models to be pre-downloaded. Ignored if load_hf_models=False.
+        """
         super().__init__()
         self.logger = setup_logger("HiveMind")
         self.observation_dim = observation_dim
@@ -88,39 +98,61 @@ class HiveMind(nn.Module):
         # 1. Data Layer (Updated to Hetero)
         self.log_encoder = HeteroLogEncoder(node_embed_dim=observation_dim)
 
-        # 2. Experts
+        # 2. Experts (non-HF experts always loaded)
         self.expert_cartographer = CartographerAgent(observation_dim, action_dim=observation_dim)
         self.expert_deepscope = DeepScopeAgent(observation_dim, action_dim=10)
         self.expert_chronos = ChronosAgent(1, action_dim=1)
 
-        self.expert_sentinel = SentinelAgent(observation_dim, action_dim=2)
-        self.expert_payloadgen = PayloadGenAgent(observation_dim, action_dim=128)
-        self.expert_mutator = MutatorAgent(
-            observation_dim,
-            action_dim=128,
-            sentinel_expert=self.expert_sentinel,
-            generator_expert=self.expert_payloadgen,
-        )
+        # HuggingFace-dependent experts (conditionally loaded)
+        if load_hf_models:
+            try:
+                self.expert_sentinel = SentinelAgent(
+                    observation_dim, action_dim=2, local_files_only=local_files_only
+                )
+                self.expert_payloadgen = PayloadGenAgent(
+                    observation_dim, action_dim=128, local_files_only=local_files_only
+                )
+                self.expert_mutator = MutatorAgent(
+                    observation_dim,
+                    action_dim=128,
+                    sentinel_expert=self.expert_sentinel,
+                    generator_expert=self.expert_payloadgen,
+                )
+            except (OSError, RuntimeError) as e:
+                self.logger.warning(
+                    f"Failed to load HuggingFace models: {e}. "
+                    "Continuing with non-HF experts only. "
+                    "To avoid network access, use load_hf_models=False or local_files_only=True with cached models."
+                )
+                # Create placeholder None values for HF experts
+                self.expert_sentinel = None
+                self.expert_payloadgen = None
+                self.expert_mutator = None
+        else:
+            self.logger.info("Skipping HuggingFace model loading (load_hf_models=False)")
+            self.expert_sentinel = None
+            self.expert_payloadgen = None
+            self.expert_mutator = None
 
         self.expert_mimic = MimicAgent(observation_dim, action_dim=2)
         self.expert_ghost = GhostAgent(observation_dim, action_dim=5)
         self.expert_stego = StegoAgent(observation_dim, action_dim=64)
         self.expert_cleaner = CleanerAgent(observation_dim, action_dim=10)
 
-        self.experts = nn.ModuleList(
-            [
-                self.expert_cartographer,
-                self.expert_deepscope,
-                self.expert_chronos,
-                self.expert_payloadgen,
-                self.expert_mutator,
-                self.expert_sentinel,
-                self.expert_mimic,
-                self.expert_ghost,
-                self.expert_stego,
-                self.expert_cleaner,
-            ]
-        )
+        # Build experts list, filtering out None (unloaded HF experts)
+        all_experts = [
+            self.expert_cartographer,
+            self.expert_deepscope,
+            self.expert_chronos,
+            self.expert_payloadgen,
+            self.expert_mutator,
+            self.expert_sentinel,
+            self.expert_mimic,
+            self.expert_ghost,
+            self.expert_stego,
+            self.expert_cleaner,
+        ]
+        self.experts = nn.ModuleList([e for e in all_experts if e is not None])
 
         # 3. Gating
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
