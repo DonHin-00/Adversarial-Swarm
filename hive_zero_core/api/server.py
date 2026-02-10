@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks, Request, Security, Depends
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
@@ -8,13 +9,32 @@ import torch
 import uvicorn
 import asyncio
 import json
+import os
 from pathlib import Path
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.orchestration.strategic_planner import StrategicPlanner
 from hive_zero_core.orchestration.safety_monitor import SafetyMonitor
 from hive_zero_core.utils.logging_config import setup_logger
 
 logger = setup_logger("API")
+
+API_KEY = os.getenv("HIVE_ZERO_API_KEY", "hive-zero-admin")
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+# Rate Limiter Setup
+limiter = Limiter(key_func=get_remote_address)
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    if api_key_header == API_KEY:
+        return api_key_header
+    raise HTTPException(
+        status_code=403,
+        detail="Could not validate credentials"
+    )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +43,7 @@ async def lifespan(app: FastAPI):
     print(" 🎨 HIVE-ZERO API Initialized")
     print(" 📊 Dashboard: http://localhost:8000/dashboard")
     print(" 📚 API Docs:  http://localhost:8000/docs")
+    print(f" 🔑 API Key:   {API_KEY}")
     print("="*50 + "\n")
     logger.info("System startup complete.")
     yield
@@ -32,14 +53,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="HIVE-ZERO C2 Interface",
     description="Command & Control Interface for the HIVE-ZERO Adversarial Swarm.",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan
 )
 
+# Attach Limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Enable CORS for cross-origin requests
+# Strictly configurable via env var, default to wildcard for dev convenience
+origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -76,26 +103,29 @@ async def root():
     return RedirectResponse(url="/dashboard")
 
 @app.get("/health", tags=["System"], summary="Get System Health")
-async def health_check():
+@limiter.limit("60/minute")
+async def health_check(request: Request):
     """Returns the current operational status of the HiveMind."""
     return {
         "status": "operational",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "active_experts": len(hive.experts),
-        "paused": is_paused
+        "paused": is_paused,
+        "auth_required": True
     }
 
 @app.get("/status", tags=["System"], summary="Get Status")
-async def status_check():
-    """Returns status specifically for monitoring tools."""
+@limiter.limit("60/minute")
+async def status_check(request: Request, api_key: str = Depends(get_api_key)):
+    """Returns status specifically for monitoring tools. Requires Auth."""
     return {
         "paused": is_paused,
         "connections": len(active_websockets)
     }
 
 @app.post("/control/pause", tags=["Control"], summary="Pause Operations")
-async def pause_system():
-    """Pauses all swarm execution."""
+async def pause_system(api_key: str = Depends(get_api_key)):
+    """Pauses all swarm execution. Requires Auth."""
     global is_paused
     is_paused = True
     logger.warning("System PAUSED by operator.")
@@ -103,8 +133,8 @@ async def pause_system():
     return {"status": "paused"}
 
 @app.post("/control/resume", tags=["Control"], summary="Resume Operations")
-async def resume_system():
-    """Resumes swarm execution."""
+async def resume_system(api_key: str = Depends(get_api_key)):
+    """Resumes swarm execution. Requires Auth."""
     global is_paused
     is_paused = False
     logger.info("System RESUMED by operator.")
@@ -121,6 +151,8 @@ async def dashboard():
 
 @app.websocket("/ws/monitor")
 async def websocket_monitor(websocket: WebSocket):
+    # WebSockets don't use standard HTTP headers easily, but we can check query params or initial message
+    # For now, let's keep it open but log connections heavily
     await websocket.accept()
     active_websockets.append(websocket)
     try:
@@ -137,8 +169,9 @@ async def broadcast_status(data: Dict):
             pass
 
 @app.get("/graph/viz", tags=["Visualization"], summary="Get Graph Data")
-def get_graph_viz():
-    """Returns the current knowledge graph for Cytoscape.js visualization."""
+@limiter.limit("30/minute")
+async def get_graph_viz(request: Request, api_key: str = Depends(get_api_key)):
+    """Returns the current knowledge graph for Cytoscape.js visualization. Requires Auth."""
     if hasattr(hive, 'last_data'):
         return hive.log_encoder.to_cytoscape_json(hive.last_data)
     # Return dummy data for viz testing if no real data
@@ -153,15 +186,16 @@ def get_graph_viz():
     }
 
 @app.post("/execute", tags=["Control"], summary="Execute Swarm Strategy")
-async def execute_swarm(request: CommandRequest):
+@limiter.limit("20/minute")
+async def execute_swarm(request: Request, cmd: CommandRequest, api_key: str = Depends(get_api_key)):
     """
-    Analyzes logs and executes the optimal adversarial strategy.
+    Analyzes logs and executes the optimal adversarial strategy. Requires Auth.
     """
     global is_paused
     if is_paused:
         return {"status": "paused"}
 
-    if request.dry_run:
+    if cmd.dry_run:
         logger.info("Executing DRY RUN simulation.")
         await broadcast_status({"type": "info", "message": "Dry Run: Simulation started"})
         # Simulate processing delay
@@ -172,7 +206,7 @@ async def execute_swarm(request: CommandRequest):
             "actions": {"simulated_expert": "would_execute_attack"}
         }
 
-    raw_logs = [log.model_dump() for log in request.logs]
+    raw_logs = [log.model_dump() for log in cmd.logs]
 
     try:
         data = hive.log_encoder.update(raw_logs)
@@ -193,7 +227,7 @@ async def execute_swarm(request: CommandRequest):
             logger.warning(f"Safety violation: {reason}")
             return {"status": "blocked", "reason": reason}
 
-        results = hive.forward(raw_logs, top_k=request.top_k)
+        results = hive.forward(raw_logs, top_k=cmd.top_k)
 
         formatted_results = {}
         for k, v in results.items():

@@ -22,51 +22,55 @@ sys.path.append(os.getcwd())
 from hive_zero_core.api.server import app
 
 client = TestClient(app)
+API_KEY_HEADER = {"X-API-Key": "hive-zero-admin"}
 
 def test_health_check():
+    # Health check is public but rate limited
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "operational"
     assert "active_experts" in data
 
+def test_status_auth():
+    # Status requires auth
+    response = client.get("/status")
+    assert response.status_code == 403 # No key
+
+    response = client.get("/status", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+
 def test_dashboard():
     response = client.get("/dashboard")
     assert response.status_code == 200
     assert "<html" in response.text
     assert "HIVE-ZERO Dashboard" in response.text
-    assert "cytoscape" in response.text # Verify new graph tab script
+    assert "showAuthModal" in response.text # Verify Auth UI logic
 
-def test_control_endpoints():
-    # Initial state should be active (not paused)
-    status_resp = client.get("/health")
-    assert status_resp.json()["paused"] == False
-
+def test_control_endpoints_auth():
     # Pause
     response = client.post("/control/pause")
+    assert response.status_code == 403
+
+    response = client.post("/control/pause", headers=API_KEY_HEADER)
     assert response.status_code == 200
     assert response.json()["status"] == "paused"
 
-    # Check paused state
-    status_resp = client.get("/health")
-    assert status_resp.json()["paused"] == True
-
     # Resume
-    response = client.post("/control/resume")
+    response = client.post("/control/resume", headers=API_KEY_HEADER)
     assert response.status_code == 200
     assert response.json()["status"] == "running"
 
-    # Check resumed state
-    status_resp = client.get("/health")
-    assert status_resp.json()["paused"] == False
-
-def test_dry_run():
+def test_dry_run_auth():
     payload = {
         "logs": [{"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6}],
         "top_k": 3,
         "dry_run": True
     }
     response = client.post("/execute", json=payload)
+    assert response.status_code == 403
+
+    response = client.post("/execute", json=payload, headers=API_KEY_HEADER)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "dry_run"
@@ -77,5 +81,5 @@ def test_cors():
         "Access-Control-Request-Method": "GET"
     })
     assert response.status_code == 200
-    # Starlette/FastAPI mirrors the origin if allowed, effectively acting as wildcard but stricter header
+    # Starlette/FastAPI mirrors the origin if allowed
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"

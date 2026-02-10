@@ -53,6 +53,9 @@
                 <span class="w-2 h-2 rounded-full" :class="paused ? 'bg-yellow-500' : 'bg-blue-500'"></span>
                 <span x-text="paused ? 'SYSTEM PAUSED' : 'SYSTEM ACTIVE'"></span>
             </div>
+            <button @click="showAuthModal = true" class="text-xs text-gray-500 hover:text-white transition-colors">
+                <span x-text="apiKey ? '🔑 Key Set' : '🔒 Set Key'"></span>
+            </button>
             <a href="/docs" target="_blank" class="hover:text-green-400 transition-colors">API Docs &rarr;</a>
         </div>
     </header>
@@ -165,6 +168,30 @@
         </section>
     </main>
 
+    <!-- Auth Modal -->
+    <div x-show="showAuthModal"
+         class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm"
+         x-transition.opacity
+         x-cloak>
+        <div class="bg-gray-800 p-6 rounded-lg shadow-2xl border border-gray-700 w-96">
+            <h3 class="text-xl font-bold text-white mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                Authentication Required
+            </h3>
+            <p class="text-gray-400 text-sm mb-4">Please enter your API Key to access control functions.</p>
+
+            <input type="password" x-model="tempKey"
+                   @keydown.enter="saveKey()"
+                   class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white mb-4 focus:border-green-500 focus:outline-none"
+                   placeholder="Enter API Key...">
+
+            <div class="flex justify-end space-x-2">
+                <button @click="showAuthModal = false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">Cancel</button>
+                <button @click="saveKey()" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold text-sm">Save Key</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function dashboard() {
             return {
@@ -175,10 +202,38 @@
                 activeExperts: [],
                 lastGoal: null,
                 cy: null,
+                showAuthModal: false,
+                apiKey: localStorage.getItem('hive_api_key') || '',
+                tempKey: '',
 
                 init() {
                     this.connect();
                     this.checkStatus();
+                    if (!this.apiKey) this.showAuthModal = true;
+                },
+
+                saveKey() {
+                    this.apiKey = this.tempKey;
+                    localStorage.setItem('hive_api_key', this.apiKey);
+                    this.showAuthModal = false;
+                    this.addLog({ type: 'info', message: 'API Key saved locally.' });
+                    this.checkStatus(); // Retry status with new key
+                },
+
+                async authenticatedFetch(url, options = {}) {
+                    const headers = {
+                        ...options.headers,
+                        'X-API-Key': this.apiKey
+                    };
+
+                    const res = await fetch(url, { ...options, headers });
+
+                    if (res.status === 403 || res.status === 401) {
+                        this.addLog({ type: 'alert', message: 'Authentication Failed. Please check API Key.' });
+                        this.showAuthModal = true;
+                        throw new Error('Auth Failed');
+                    }
+                    return res;
                 },
 
                 async checkStatus() {
@@ -192,17 +247,17 @@
                 async togglePause() {
                     const endpoint = this.paused ? '/control/resume' : '/control/pause';
                     try {
-                        await fetch(endpoint, { method: 'POST' });
+                        await this.authenticatedFetch(endpoint, { method: 'POST' });
                         this.paused = !this.paused;
                     } catch (e) {
-                        this.addLog({ type: 'alert', message: 'Failed to toggle pause state' });
+                        // handled by authenticatedFetch
                     }
                 },
 
                 async triggerDryRun() {
                     this.addLog({ type: 'info', message: 'Triggering Dry Run...' });
                     try {
-                        const res = await fetch('/execute', {
+                        const res = await this.authenticatedFetch('/execute', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -251,7 +306,6 @@
                     if (data.type === 'execution') {
                         this.lastGoal = data.goal;
                         this.activeExperts = data.experts_active || [];
-                        // Auto-refresh graph on execution
                         if (this.cy) this.loadGraph();
                     } else if (data.message && data.message.includes('PAUSED')) {
                         this.paused = true;
@@ -274,7 +328,7 @@
 
                 async loadGraph() {
                     try {
-                        const res = await fetch('/graph/viz');
+                        const res = await this.authenticatedFetch('/graph/viz');
                         const elements = await res.json();
 
                         if (!this.cy) {

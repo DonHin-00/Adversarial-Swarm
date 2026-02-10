@@ -27,7 +27,7 @@ class Agent_Chaos(BaseExpert):
         # Or just use the generated sequence as the packet.
         # Action dim usually unused for generation experts (return sequence).
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> Any:
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # x: Seed Packet (Byte sequence) [Batch, Seq]
 
         # Generate fuzzed sequence
