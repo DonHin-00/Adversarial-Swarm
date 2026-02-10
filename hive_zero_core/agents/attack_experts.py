@@ -120,6 +120,27 @@ class MutatorAgent(BaseExpert):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
         self.sentinel = sentinel_expert
         self.generator = generator_expert
+    
+    def _validate_dependencies(self) -> bool:
+        """
+        Validates that required dependencies (tokenizers, models) are initialized.
+        
+        Returns:
+            True if all dependencies are available, False otherwise
+        """
+        if not hasattr(self.generator, 'tokenizer') or self.generator.tokenizer is None:
+            self.logger.error("Generator tokenizer not initialized")
+            return False
+        
+        if not hasattr(self.sentinel, 'tokenizer') or self.sentinel.tokenizer is None:
+            self.logger.error("Sentinel tokenizer not initialized")
+            return False
+        
+        if not hasattr(self.sentinel, 'backbone') or self.sentinel.backbone is None:
+            self.logger.error("Sentinel backbone not initialized")
+            return False
+        
+        return True
 
     def _inner_loop_search(self, embedding: torch.Tensor, iterations: int = 5) -> torch.Tensor:
         # embedding: [1, seq, dim]
@@ -143,34 +164,23 @@ class MutatorAgent(BaseExpert):
         return optimized_emb.detach()
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        # Validate dependencies before proceeding
+        if not self._validate_dependencies():
+            return torch.zeros(1, x.size(-1), device=x.device)
+        
         # 1. Base Generation
         with torch.no_grad():
             # Bypass gating for internal dependencies to avoid zero tensors
             gen_out = self.generator._forward_impl(x, context)
             
-            # Defensive check: ensure tokenizer is available
-            if not hasattr(self.generator, 'tokenizer') or self.generator.tokenizer is None:
-                self.logger.error("Generator tokenizer not initialized")
-                return torch.zeros(1, x.size(-1), device=x.device)
-            
             # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
             # gen_out shape: [Batch, Seq]
             gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
-            
-            # Defensive check: ensure sentinel tokenizer is available
-            if not hasattr(self.sentinel, 'tokenizer') or self.sentinel.tokenizer is None:
-                self.logger.error("Sentinel tokenizer not initialized")
-                return torch.zeros(1, x.size(-1), device=x.device)
             
             # Re-encode for Sentinel (BERT)
             sentinel_inputs = self.sentinel.tokenizer(gen_text, return_tensors="pt", padding=True, truncation=True).to(x.device)
             initial_token_ids = sentinel_inputs["input_ids"]
 
-        # Defensive check: ensure backbone embeddings are available
-        if not hasattr(self.sentinel, 'backbone') or self.sentinel.backbone is None:
-            self.logger.error("Sentinel backbone not initialized")
-            return torch.zeros(1, x.size(-1), device=x.device)
-            
         embed_layer = self.sentinel.backbone.get_input_embeddings()
         current_embeddings = embed_layer(initial_token_ids).detach()
 

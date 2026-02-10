@@ -59,8 +59,12 @@ class PrioritizedReplayBuffer:
         probs = self.priorities[:current_size] ** self.alpha
         probs /= probs.sum()
 
+        # Sample only from valid entries (0 to current_size-1)
         indices = np.random.choice(current_size, batch_size, p=probs)
         samples = [self.buffer[idx] for idx in indices]
+        
+        # Validate all samples are non-None (should never happen with correct size tracking)
+        assert all(s is not None for s in samples), "Buffer contains None entries in valid range"
 
         # Importance Sampling (IS) weights to correct for bias
         # w_i = (1/N * 1/P(i))^beta

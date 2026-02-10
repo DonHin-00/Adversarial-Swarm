@@ -4,6 +4,7 @@ from torch_geometric.data import HeteroData
 from typing import List, Dict, Optional, Tuple, Union
 import ipaddress
 import hashlib
+import logging
 
 class HeteroLogEncoder(nn.Module):
     """
@@ -37,7 +38,6 @@ class HeteroLogEncoder(nn.Module):
             return torch.tensor(bits, dtype=torch.float32)
         except (ValueError, ipaddress.AddressValueError, TypeError) as e:
             # Log malformed IP addresses for debugging
-            import logging
             logging.getLogger(__name__).warning(f"Invalid IP address '{ip_str}': {e}")
             return torch.zeros(32, dtype=torch.float32)
 
