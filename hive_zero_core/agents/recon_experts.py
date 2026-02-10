@@ -73,7 +73,9 @@ class Agent_DeepScope(BaseExpert):
                 try:
                     # Test if broadcasting will work by attempting the operation
                     _ = logits * mask
-                except RuntimeError as e:
+                except (RuntimeError, ValueError) as e:
+                    # RuntimeError: incompatible dimensions for broadcasting
+                    # ValueError: invalid dimensions or shapes
                     self.logger.warning(
                         f"Mask shape {mask.shape} incompatible with logits {logits.shape}: {e}"
                     )

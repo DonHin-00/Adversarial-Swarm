@@ -45,7 +45,7 @@ Tests that use Sentinel and PayloadGen will fail in sandboxed environments witho
 
 The information gain reward currently uses hardcoded placeholder values for entropy instead of computing actual entropy from network topology.
 
-**Location**: `hive_zero_core/training/adversarial_loop.py:181-185`
+**Location**: `hive_zero_core/training/adversarial_loop.py` in the training loop, search for "NOTE: In production, track actual entropy changes"
 
 ```python
 # NOTE: In production, track actual entropy changes
@@ -89,15 +89,15 @@ The training system currently supports single-GPU or CPU training. Multi-GPU and
 
 Some experts have simplified implementations that could be enhanced:
 
-**Agent_Sentinel** (Line 72-78 in attack_experts.py):
+**Agent_Sentinel** (attack_experts.py, dimension handling logic):
 - Uses fallback padding/slicing for dimension mismatches
 - Could use learned projection layers instead
 
-**Agent_Tarpit** (Line 125-129 in defense_experts.py):
+**Agent_Tarpit** (defense_experts.py, attention weight handling):
 - Attention weights artificially clamped with boost
 - Could use more sophisticated trap selection strategy
 
-**Agent_Mutator** (Line 195 in attack_experts.py):
+**Agent_Mutator** (attack_experts.py, optimization loop):
 - Only 2 optimization steps for stability
 - Could be increased for better payload optimization
 
@@ -113,7 +113,7 @@ Some experts have simplified implementations that could be enhanced:
 
 The current graph encoding always averages to a global state vector, not fully utilizing the graph structure.
 
-**Location**: `hive_zero_core/hive_mind.py:121-123`
+**Location**: `hive_zero_core/hive_mind.py` in HiveMind.forward(), search for "Average node features to global state"
 
 **Future Work**:
 - [ ] Implement graph-level readout with attention
