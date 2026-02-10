@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from typing import Optional, Union
+from typing import Optional
 
 class CompositeReward:
     """
@@ -15,6 +15,30 @@ class CompositeReward:
         self.w_adv = w_adv
         self.w_info = w_info
         self.w_stealth = w_stealth
+
+    def _renormalize_distribution(self, dist: torch.Tensor, epsilon: float = 1e-8) -> torch.Tensor:
+        """
+        Renormalize a probability distribution with safety checks.
+
+        Args:
+            dist: Input probability distribution tensor (assumed to be non-negative)
+            epsilon: Small value to prevent division by zero
+
+        Returns:
+            Normalized distribution
+
+        Note:
+            This function assumes dist contains non-negative values. Negative values
+            will be clamped to epsilon, which may not reflect the intended distribution.
+            
+            Two-step clamping strategy:
+            1. Clamp individual values to prevent log(0) in KL divergence
+            2. Clamp sum to prevent division by zero when normalizing
+        """
+        # Step 1: Clamp values to prevent log(0)
+        dist_clamped = torch.clamp(dist, min=epsilon)
+        # Step 2: Normalize with safe division
+        return dist_clamped / torch.clamp(dist_clamped.sum(dim=-1, keepdim=True), min=epsilon)
 
     def calculate_adversarial_reward(self, sentinel_score: torch.Tensor) -> torch.Tensor:
         """
@@ -48,9 +72,12 @@ class CompositeReward:
         if traffic_dist.shape != baseline_dist.shape:
             return torch.tensor(0.0, device=traffic_dist.device)
 
+        # Renormalize distributions with safety checks
+        traffic_dist_norm = self._renormalize_distribution(traffic_dist)
+        baseline_dist_norm = self._renormalize_distribution(baseline_dist)
+
         # Maximize negative KL (minimize divergence)
-        # traffic_dist.log() assumes input is probs
-        kl = F.kl_div(traffic_dist.log(), baseline_dist, reduction='batchmean')
+        kl = F.kl_div(traffic_dist_norm.log(), baseline_dist_norm, reduction='batchmean')
         return -kl
 
     def compute(self, adv_score: torch.Tensor, info_gain: float,

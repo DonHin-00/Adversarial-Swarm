@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Any, Tuple, Union
 
 class PrioritizedReplayBuffer:
     """
@@ -17,24 +17,23 @@ class PrioritizedReplayBuffer:
         """
         self.capacity = capacity
         self.alpha = alpha
-        self.buffer = []
+        # Pre-allocate buffer to prevent unbounded growth during initialization
+        self.buffer = [None] * capacity
         self.priorities = np.zeros((capacity,), dtype=np.float32)
         self.pos = 0
+        self.size = 0  # Track actual number of elements
 
     def push(self, state: Any, action: Any, reward: float, next_state: Any):
         """
         Adds a transition to the buffer.
         """
         # Set max priority for new transitions to ensure they are sampled at least once
-        max_prio = self.priorities.max() if self.buffer else 1.0
+        max_prio = self.priorities.max() if self.size > 0 else 1.0
 
-        if len(self.buffer) < self.capacity:
-            self.buffer.append((state, action, reward, next_state))
-        else:
-            self.buffer[self.pos] = (state, action, reward, next_state)
-
+        self.buffer[self.pos] = (state, action, reward, next_state)
         self.priorities[self.pos] = max_prio
         self.pos = (self.pos + 1) % self.capacity
+        self.size = min(self.size + 1, self.capacity)
 
     def sample(self, batch_size: int, beta: float = 0.4) -> Tuple[List[Tuple], np.ndarray, torch.Tensor]:
         """
@@ -49,19 +48,27 @@ class PrioritizedReplayBuffer:
             indices: Indices of sampled transitions.
             weights: Importance-sampling weights for the loss function.
         """
-        if len(self.buffer) == 0:
+        if self.size == 0:
             return [], np.array([]), torch.tensor([])
 
         # Handle smaller-than-requested batches
-        current_size = len(self.buffer)
+        current_size = self.size
         batch_size = min(batch_size, current_size)
 
         # Proportional sampling: P(i) = p_i^alpha / sum(p_k^alpha)
         probs = self.priorities[:current_size] ** self.alpha
         probs /= probs.sum()
 
+        # Sample only from valid entries (0 to current_size-1)
         indices = np.random.choice(current_size, batch_size, p=probs)
         samples = [self.buffer[idx] for idx in indices]
+        
+        # Validate all samples are non-None (critical for buffer integrity)
+        if any(s is None for s in samples):
+            raise RuntimeError(
+                f"Buffer integrity violation: None entries found in valid range. "
+                f"Size={self.size}, Pos={self.pos}, Sampled indices={indices}"
+            )
 
         # Importance Sampling (IS) weights to correct for bias
         # w_i = (1/N * 1/P(i))^beta
@@ -78,4 +85,4 @@ class PrioritizedReplayBuffer:
             self.priorities[idx] = prio + 1e-6 # Add epsilon to avoid zero priority
 
     def __len__(self) -> int:
-        return len(self.buffer)
+        return self.size

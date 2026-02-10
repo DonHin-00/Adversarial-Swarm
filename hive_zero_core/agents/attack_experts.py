@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from typing import Optional, Dict, Union
+from typing import Optional, Dict
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
 
@@ -120,6 +120,31 @@ class MutatorAgent(BaseExpert):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
         self.sentinel = sentinel_expert
         self.generator = generator_expert
+    
+    def _validate_dependencies(self) -> None:
+        """
+        Validates that required dependencies (tokenizers, models) are initialized.
+        
+        Raises:
+            RuntimeError: If any required dependency is not properly initialized
+        """
+        if not hasattr(self.generator, 'tokenizer') or self.generator.tokenizer is None:
+            raise RuntimeError(
+                "Generator tokenizer not initialized. Ensure PayloadGenAgent "
+                "was constructed successfully before using MutatorAgent."
+            )
+        
+        if not hasattr(self.sentinel, 'tokenizer') or self.sentinel.tokenizer is None:
+            raise RuntimeError(
+                "Sentinel tokenizer not initialized. Ensure SentinelAgent "
+                "was constructed successfully before using MutatorAgent."
+            )
+        
+        if not hasattr(self.sentinel, 'backbone') or self.sentinel.backbone is None:
+            raise RuntimeError(
+                "Sentinel backbone not initialized. Ensure SentinelAgent "
+                "was constructed successfully before using MutatorAgent."
+            )
 
     def _inner_loop_search(self, embedding: torch.Tensor, iterations: int = 5) -> torch.Tensor:
         # embedding: [1, seq, dim]
@@ -129,7 +154,8 @@ class MutatorAgent(BaseExpert):
         for _ in range(iterations):
             optimizer.zero_grad()
             # We want to MAXIMIZE probability of evasion (P(Allowed))
-            probs = self.sentinel(optimized_emb)
+            # Call Sentinel's ungated implementation to ensure gradients flow through it
+            probs = self.sentinel._forward_impl(optimized_emb)
             loss = -torch.log(probs[:, 1] + 1e-8).mean()
             loss.backward()
             optimizer.step()
@@ -142,12 +168,18 @@ class MutatorAgent(BaseExpert):
         return optimized_emb.detach()
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        # Validate dependencies before proceeding (raises RuntimeError if invalid)
+        self._validate_dependencies()
+        
         # 1. Base Generation
         with torch.no_grad():
-            gen_out = self.generator(x, context)
+            # Bypass gating for internal dependencies to avoid zero tensors
+            gen_out = self.generator._forward_impl(x, context)
+            
             # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
             # gen_out shape: [Batch, Seq]
             gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
+            
             # Re-encode for Sentinel (BERT)
             sentinel_inputs = self.sentinel.tokenizer(gen_text, return_tensors="pt", padding=True, truncation=True).to(x.device)
             initial_token_ids = sentinel_inputs["input_ids"]

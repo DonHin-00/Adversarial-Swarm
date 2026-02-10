@@ -8,8 +8,9 @@ from hive_zero_core.agents.base_expert import BaseExpert
 class GNNModule(nn.Module):
     def __init__(self, observation_dim: int, hidden_dim: int, action_dim: int):
         super().__init__()
-        self.conv1 = GATv2Conv(observation_dim, hidden_dim, heads=4, concat=True)
-        self.conv2 = GATv2Conv(hidden_dim * 4, action_dim, heads=1, concat=False)
+        # Set add_self_loops=False for heterogeneous graphs
+        self.conv1 = GATv2Conv(observation_dim, hidden_dim, heads=4, concat=True, add_self_loops=False)
+        self.conv2 = GATv2Conv(hidden_dim * 4, action_dim, heads=1, concat=False, add_self_loops=False)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         x = torch.relu(self.conv1(x, edge_index))
@@ -47,7 +48,15 @@ class CartographerAgent(BaseExpert):
             out_dict = self.gnn(x_dict, edge_index_dict)
 
             # 2. Temporal Reasoning (Node History)
-            ip_emb = out_dict.get('ip', torch.zeros(0, self.action_dim))
+            if 'ip' in out_dict:
+                ip_emb = out_dict['ip']
+            else:
+                # Ensure the fallback tensor is created on the same device as the model
+                try:
+                    device = next(self.parameters()).device
+                except StopIteration:
+                    device = torch.device('cpu')
+                ip_emb = torch.zeros(0, self.action_dim, device=device)
 
             if ip_emb.size(0) > 0:
                 # Mock history for prototype (Batch=1, Seq=NodeCount, Dim=ActionDim)
