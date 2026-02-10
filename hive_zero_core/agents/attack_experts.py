@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from typing import Optional, Dict, Union
+from typing import Optional, Dict
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
 
@@ -129,7 +129,8 @@ class MutatorAgent(BaseExpert):
         for _ in range(iterations):
             optimizer.zero_grad()
             # We want to MAXIMIZE probability of evasion (P(Allowed))
-            probs = self.sentinel(optimized_emb)
+            # Call Sentinel's ungated implementation to ensure gradients flow through it
+            probs = self.sentinel._forward_impl(optimized_emb)
             loss = -torch.log(probs[:, 1] + 1e-8).mean()
             loss.backward()
             optimizer.step()
@@ -144,7 +145,8 @@ class MutatorAgent(BaseExpert):
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # 1. Base Generation
         with torch.no_grad():
-            gen_out = self.generator(x, context)
+            # Bypass gating for internal dependencies to avoid zero tensors
+            gen_out = self.generator._forward_impl(x, context)
             # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
             # gen_out shape: [Batch, Seq]
             gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)

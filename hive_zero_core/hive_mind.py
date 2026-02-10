@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple, Any, TypedDict
+from typing import List, Dict, Tuple, TypedDict
 from hive_zero_core.utils.logging_config import setup_logger
 from hive_zero_core.memory.graph_store import HeteroLogEncoder
 from hive_zero_core.agents.recon_experts import CartographerAgent, DeepScopeAgent, ChronosAgent
@@ -105,6 +105,10 @@ class HiveMind(nn.Module):
 
         # 3. Gating
         self.gating_network = NoisyGatingNetwork(observation_dim, num_experts=len(self.experts))
+        
+        # 4. Projection layer for Sentinel (observation_dim -> BERT hidden_size)
+        # The Sentinel's BERT backbone expects hidden_size embeddings
+        self.sentinel_projection = nn.Linear(observation_dim, self.expert_sentinel.backbone.config.hidden_size)
 
     def forward(self, raw_logs: List[Dict], top_k: int = 3) -> HiveResults:
         """
@@ -174,7 +178,9 @@ class HiveMind(nn.Module):
                     results["optimized_payload"] = out
 
                 elif expert.name == "Sentinel":
-                    out = expert(global_state.unsqueeze(1))
+                    # Project observation_dim to BERT's hidden_size to avoid shape mismatch
+                    projected_state = self.sentinel_projection(global_state)
+                    out = expert(projected_state.unsqueeze(1))
                     results["defense_score"] = out
 
                 elif expert.name == "Mimic":

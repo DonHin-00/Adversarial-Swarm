@@ -47,7 +47,15 @@ class CartographerAgent(BaseExpert):
             out_dict = self.gnn(x_dict, edge_index_dict)
 
             # 2. Temporal Reasoning (Node History)
-            ip_emb = out_dict.get('ip', torch.zeros(0, self.action_dim))
+            if 'ip' in out_dict:
+                ip_emb = out_dict['ip']
+            else:
+                # Ensure the fallback tensor is created on the same device as the rest of the model/graph
+                if len(out_dict) > 0:
+                    device = next(iter(out_dict.values())).device
+                else:
+                    device = next(self.parameters()).device
+                ip_emb = torch.zeros(0, self.action_dim, device=device)
 
             if ip_emb.size(0) > 0:
                 # Mock history for prototype (Batch=1, Seq=NodeCount, Dim=ActionDim)

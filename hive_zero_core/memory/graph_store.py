@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch_geometric.data import HeteroData
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union
 import ipaddress
 import hashlib
 
@@ -40,6 +40,9 @@ class HeteroLogEncoder(nn.Module):
 
     def update(self, logs: List[Dict]) -> HeteroData:
         data = HeteroData()
+
+        # Infer device from module parameters
+        device = next(self.parameters()).device
 
         # Lists for edges
         ip_src_indices = []
@@ -95,25 +98,25 @@ class HeteroLogEncoder(nn.Module):
             ip_features.append(self._ip_to_tensor(ip))
 
         if ip_features:
-            x_ip = self.ip_encoder(torch.stack(ip_features))
+            x_ip = self.ip_encoder(torch.stack(ip_features).to(device))
         else:
-            x_ip = torch.zeros(0, self.node_embed_dim)
+            x_ip = torch.zeros(0, self.node_embed_dim, device=device)
 
         # Port Nodes
         sorted_ports = sorted(local_port_map.items(), key=lambda x: x[1])
-        port_indices = torch.tensor([p for p, _ in sorted_ports], dtype=torch.long)
+        port_indices = torch.tensor([p for p, _ in sorted_ports], dtype=torch.long, device=device)
         if len(port_indices) > 0:
             x_port = self.port_encoder(port_indices)
         else:
-            x_port = torch.zeros(0, self.node_embed_dim)
+            x_port = torch.zeros(0, self.node_embed_dim, device=device)
 
         # Proto Nodes
         sorted_protos = sorted(local_proto_map.items(), key=lambda x: x[1])
-        proto_indices = torch.tensor([p for p, _ in sorted_protos], dtype=torch.long)
+        proto_indices = torch.tensor([p for p, _ in sorted_protos], dtype=torch.long, device=device)
         if len(proto_indices) > 0:
             x_proto = self.proto_encoder(proto_indices)
         else:
-            x_proto = torch.zeros(0, self.node_embed_dim)
+            x_proto = torch.zeros(0, self.node_embed_dim, device=device)
 
         # Assign to Data
         data['ip'].x = x_ip
@@ -123,20 +126,22 @@ class HeteroLogEncoder(nn.Module):
         # Assign Edges
         # flow: IP -> IP
         if ip_src_indices:
-            data['ip', 'flow', 'ip'].edge_index = torch.tensor([ip_src_indices, ip_dst_indices], dtype=torch.long)
+            data['ip', 'flow', 'ip'].edge_index = torch.tensor([ip_src_indices, ip_dst_indices], dtype=torch.long, device=device)
         else:
-            data['ip', 'flow', 'ip'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['ip', 'flow', 'ip'].edge_index = torch.empty(2, 0, dtype=torch.long, device=device)
 
         # binds: IP -> Port
         if ip_to_port_src:
-            data['ip', 'binds', 'port'].edge_index = torch.tensor([ip_to_port_src, ip_to_port_dst], dtype=torch.long)
+            data['ip', 'binds', 'port'].edge_index = torch.tensor([ip_to_port_src, ip_to_port_dst], dtype=torch.long, device=device)
         else:
-            data['ip', 'binds', 'port'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['ip', 'binds', 'port'].edge_index = torch.empty(2, 0, dtype=torch.long, device=device)
 
         # uses: Port -> Protocol
         if port_to_proto_src:
-            data['port', 'uses', 'protocol'].edge_index = torch.tensor([port_to_proto_src, port_to_proto_dst], dtype=torch.long)
+            data['port', 'uses', 'protocol'].edge_index = torch.tensor([port_to_proto_src, port_to_proto_dst], dtype=torch.long, device=device)
         else:
-            data['port', 'uses', 'protocol'].edge_index = torch.empty(2, 0, dtype=torch.long)
+            data['port', 'uses', 'protocol'].edge_index = torch.empty(2, 0, dtype=torch.long, device=device)
+
+        return data
 
         return data

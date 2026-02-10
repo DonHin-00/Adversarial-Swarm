@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from typing import Optional, Union
+from typing import Optional
 
 class CompositeReward:
     """
@@ -48,9 +48,17 @@ class CompositeReward:
         if traffic_dist.shape != baseline_dist.shape:
             return torch.tensor(0.0, device=traffic_dist.device)
 
+        # Clamp to prevent log(0) which causes -inf and NaNs
+        epsilon = 1e-8
+        traffic_dist_clamped = torch.clamp(traffic_dist, min=epsilon)
+        baseline_dist_clamped = torch.clamp(baseline_dist, min=epsilon)
+        
+        # Renormalize after clamping to maintain valid probability distributions
+        traffic_dist_clamped = traffic_dist_clamped / traffic_dist_clamped.sum(dim=-1, keepdim=True)
+        baseline_dist_clamped = baseline_dist_clamped / baseline_dist_clamped.sum(dim=-1, keepdim=True)
+
         # Maximize negative KL (minimize divergence)
-        # traffic_dist.log() assumes input is probs
-        kl = F.kl_div(traffic_dist.log(), baseline_dist, reduction='batchmean')
+        kl = F.kl_div(traffic_dist_clamped.log(), baseline_dist_clamped, reduction='batchmean')
         return -kl
 
     def compute(self, adv_score: torch.Tensor, info_gain: float,
