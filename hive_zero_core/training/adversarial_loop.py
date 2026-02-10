@@ -249,7 +249,7 @@ def load_checkpoint(
     Returns:
         The epoch number from the checkpoint.
     """
-    checkpoint = torch.load(path)
+    checkpoint = torch.load(path, map_location="cpu", weights_only=True)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     return checkpoint['epoch']
