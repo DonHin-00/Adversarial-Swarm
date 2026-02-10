@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     print(" 🎨 HIVE-ZERO API Initialized")
     print(" 📊 Dashboard: http://localhost:8000/dashboard")
     print(" 📚 API Docs:  http://localhost:8000/docs")
-    print(f" 🔑 API Key:   {API_KEY}")
+    print(f" 🔑 API Key:   [REDACTED]")
     print("="*50 + "\n")
     logger.info("System startup complete.")
     yield

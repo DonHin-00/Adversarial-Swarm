@@ -9,3 +9,7 @@
 ## 2026-02-08 - Securing Headless UIs
 **Learning:** Even internal dashboards need security. Implementing a simple client-side API Key modal (stored in localStorage) provides a massive security upgrade over open endpoints without requiring complex backend session management.
 **Action:** Always secure control endpoints with at least an API Key, and provide a way for the UI to input it.
+
+## 2026-02-08 - Secrets Management
+**Learning:** Never print sensitive keys to stdout, even in "helpful" startup banners. CodeQL flags this immediately.
+**Action:** Always redact or omit secrets in logs.
