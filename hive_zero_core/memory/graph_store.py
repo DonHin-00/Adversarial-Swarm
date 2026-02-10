@@ -41,8 +41,8 @@ class HeteroLogEncoder(nn.Module):
     def update(self, logs: List[Dict]) -> HeteroData:
         data = HeteroData()
 
-        # Infer device from module parameters
-        device = next(self.parameters()).device
+        # Infer device from module parameters (with fallback to CPU)
+        device = next(self.parameters(), torch.tensor(0)).device
 
         # Lists for edges
         ip_src_indices = []
