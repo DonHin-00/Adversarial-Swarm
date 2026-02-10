@@ -52,6 +52,15 @@ class LogEncoder(nn.Module):
         self.idx_to_ip.clear()
         self.next_idx = 0
 
+    def _empty_graph(self) -> Data:
+        """Return a zero-node graph on the module's device."""
+        device = self.ip_projection.weight.device
+        return Data(
+            x=torch.zeros((0, self.node_feature_dim), device=device),
+            edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+            edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device),
+        )
+
     def update(self, logs: List[Dict]) -> Data:
         """
         Converts a list of raw log dictionaries into a PyG Data object.
@@ -66,13 +75,7 @@ class LogEncoder(nn.Module):
             - edge_attr: Edge features [num_edges, edge_feature_dim * 2]
         """
         if not logs:
-            # Return empty graph on the module's device
-            device = self.ip_projection.weight.device
-            return Data(
-                x=torch.zeros((0, self.node_feature_dim), device=device),
-                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device),
-            )
+            return self._empty_graph()
 
         src_indices = []
         dst_indices = []
@@ -117,12 +120,7 @@ class LogEncoder(nn.Module):
             x_raw_list.append(self._ip_to_bits(ip_str))
 
         if not x_raw_list:
-            device = self.ip_projection.weight.device
-            return Data(
-                x=torch.zeros((0, self.node_feature_dim), device=device),
-                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device),
-            )
+            return self._empty_graph()
 
         x_tensor = torch.stack(x_raw_list) # [num_nodes, 32]
         x_embedded = self.ip_projection(x_tensor) # [num_nodes, node_feature_dim]

@@ -507,7 +507,7 @@ class TestCompositeRewardUpgrades:
 
         assert isinstance(result, torch.Tensor)
         assert not torch.isnan(result).any()
-        assert result.requires_grad or result.grad_fn is not None or True  # at minimum is a tensor
+        assert result.dim() >= 0  # at minimum is a valid tensor
 
 
 class TestSyntheticExperienceDevice:
