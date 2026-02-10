@@ -176,7 +176,7 @@ class HiveMind(nn.Module):
                 f"Invalid top_k={top_k}. Expected top_k to be between 1 and {num_experts} "
                 "to safely select experts using torch.topk."
             )
-        
+
         top_k_vals, top_k_indices = torch.topk(weights, k=top_k, dim=-1)
         active_indices = top_k_indices[0].tolist()
 

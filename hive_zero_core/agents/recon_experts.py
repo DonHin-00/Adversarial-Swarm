@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import GATv2Conv, to_hetero
 
-from hive_zero_core.agents.base_expert import BaseExpert
+from hive_zero_core.agents.base_expert import BaseExpert, SkillLevel
 
 
 class GNNModule(nn.Module):
@@ -29,10 +29,20 @@ class CartographerAgent(BaseExpert):
     """
     Expert 1: Temporal Graph Attention Network (T-GAT)
     Utilizes GATv2Conv and GRU to model node history and complex topology.
+
+    Primary Skills: Network Topology Mapping, Graph Analysis
     """
 
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64):
-        super().__init__(observation_dim, action_dim, name="Cartographer", hidden_dim=hidden_dim)
+        super().__init__(
+            observation_dim,
+            action_dim,
+            name="Cartographer",
+            hidden_dim=hidden_dim,
+            primary_skills=["recon_001", "recon_002"],  # Network mapping, port scanning
+            secondary_skills=["recon_003"],  # Temporal pattern analysis
+            skill_level=SkillLevel.EXPERT,
+        )
 
         # GATv2 Architecture
         gnn_base = GNNModule(observation_dim, hidden_dim, action_dim)

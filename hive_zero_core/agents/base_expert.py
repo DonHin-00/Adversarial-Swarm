@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Union
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -8,9 +9,25 @@ from torch_geometric.data import HeteroData
 from hive_zero_core.utils.logging_config import setup_logger
 
 
+class SkillLevel(Enum):
+    """Skill proficiency levels for agents"""
+
+    NOVICE = 1
+    INTERMEDIATE = 2
+    EXPERT = 3
+    MASTER = 4
+
+
 class BaseExpert(nn.Module, ABC):
     def __init__(
-        self, observation_dim: int, action_dim: int, name: str = "BaseExpert", hidden_dim: int = 64
+        self,
+        observation_dim: int,
+        action_dim: int,
+        name: str = "BaseExpert",
+        hidden_dim: int = 64,
+        primary_skills: Optional[List[str]] = None,
+        secondary_skills: Optional[List[str]] = None,
+        skill_level: SkillLevel = SkillLevel.INTERMEDIATE,
     ):
         super().__init__()
         self.observation_dim = observation_dim
@@ -22,11 +39,70 @@ class BaseExpert(nn.Module, ABC):
         # Gating Logic
         self.is_active = False
 
+        # Skill System
+        self.skill_level = skill_level
+        self.primary_skills = primary_skills or []
+        self.secondary_skills = secondary_skills or []
+
+        # Skill proficiency multipliers based on level
+        self.skill_multipliers = {
+            SkillLevel.NOVICE: 0.7,
+            SkillLevel.INTERMEDIATE: 1.0,
+            SkillLevel.EXPERT: 1.3,
+            SkillLevel.MASTER: 1.5,
+        }
+
+        # Track skill usage and effectiveness
+        self.skill_stats = {
+            "activations": 0,
+            "successes": 0,
+            "failures": 0,
+            "avg_confidence": 0.0,
+        }
+
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(name='{self.name}', obs_dim={self.observation_dim}, action_dim={self.action_dim})"
+        return (
+            f"{self.__class__.__name__}(name='{self.name}', "
+            f"skill_level={self.skill_level.name}, "
+            f"obs_dim={self.observation_dim}, action_dim={self.action_dim})"
+        )
 
     def __str__(self) -> str:
-        return f"[{self.name}] Agent (Active: {self.is_active})"
+        return (
+            f"[{self.name}] Agent (Active: {self.is_active}, "
+            f"Level: {self.skill_level.name}, "
+            f"Skills: {len(self.primary_skills)})"
+        )
+
+    def get_skill_multiplier(self) -> float:
+        """Returns the proficiency multiplier for this agent's skill level."""
+        return self.skill_multipliers[self.skill_level]
+
+    def record_activation(self, success: bool = False, confidence: float = 0.0):
+        """Track skill usage statistics."""
+        self.skill_stats["activations"] += 1
+        if success:
+            self.skill_stats["successes"] += 1
+        else:
+            self.skill_stats["failures"] += 1
+
+        # Update running average of confidence
+        n = self.skill_stats["activations"]
+        self.skill_stats["avg_confidence"] = (
+            (n - 1) * self.skill_stats["avg_confidence"] + confidence
+        ) / n
+
+    def get_effectiveness_score(self) -> float:
+        """Calculate overall effectiveness score (0.0 to 1.0)."""
+        if self.skill_stats["activations"] == 0:
+            return 0.5  # Neutral score for untested agents
+
+        success_rate = self.skill_stats["successes"] / self.skill_stats["activations"]
+        confidence = self.skill_stats["avg_confidence"]
+
+        # Combine success rate and confidence with skill multiplier
+        base_score = success_rate * 0.7 + confidence * 0.3
+        return min(1.0, base_score * self.get_skill_multiplier())
 
     def forward(
         self,
