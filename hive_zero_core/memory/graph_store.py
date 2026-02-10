@@ -35,14 +35,20 @@ class HeteroLogEncoder(nn.Module):
             ip_int = int(ipaddress.IPv4Address(ip_str))
             bits = [float(x) for x in format(ip_int, '032b')]
             return torch.tensor(bits, dtype=torch.float32)
-        except:
+        except (ValueError, ipaddress.AddressValueError, TypeError) as e:
+            # Log malformed IP addresses for debugging
+            import logging
+            logging.getLogger(__name__).warning(f"Invalid IP address '{ip_str}': {e}")
             return torch.zeros(32, dtype=torch.float32)
 
     def update(self, logs: List[Dict]) -> HeteroData:
         data = HeteroData()
 
-        # Infer device from module parameters (with fallback to CPU)
-        device = next(self.parameters(), torch.tensor(0)).device
+        # Infer device from module parameters with safe fallback
+        try:
+            device = next(self.parameters()).device
+        except StopIteration:
+            device = torch.device('cpu')
 
         # Lists for edges
         ip_src_indices = []
@@ -68,8 +74,20 @@ class HeteroLogEncoder(nn.Module):
         for log in logs:
             src_ip = log.get('src_ip', '0.0.0.0')
             dst_ip = log.get('dst_ip', '0.0.0.0')
-            dport = int(log.get('port', 0))
-            proto = int(log.get('proto', 6))
+            
+            # Validate and clamp port to valid range
+            try:
+                dport = int(log.get('port', 0))
+                dport = max(0, min(dport, 65535))  # Clamp to valid port range
+            except (ValueError, TypeError):
+                dport = 0
+            
+            # Validate and clamp protocol to valid range for embedding (0-255)
+            try:
+                proto = int(log.get('proto', 6))
+                proto = max(0, min(proto, 255))  # Clamp to valid protocol range
+            except (ValueError, TypeError):
+                proto = 6  # Default to TCP
 
             s_idx = self._get_idx(src_ip, local_ip_map)
             d_idx = self._get_idx(dst_ip, local_ip_map)

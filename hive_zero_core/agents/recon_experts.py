@@ -51,8 +51,11 @@ class CartographerAgent(BaseExpert):
             if 'ip' in out_dict:
                 ip_emb = out_dict['ip']
             else:
-                # Ensure the fallback tensor is created on the same device as the model (with fallback to CPU)
-                device = next(self.parameters(), torch.tensor(0)).device
+                # Ensure the fallback tensor is created on the same device as the model
+                try:
+                    device = next(self.parameters()).device
+                except StopIteration:
+                    device = torch.device('cpu')
                 ip_emb = torch.zeros(0, self.action_dim, device=device)
 
             if ip_emb.size(0) > 0:

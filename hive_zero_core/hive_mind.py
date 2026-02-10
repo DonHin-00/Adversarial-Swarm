@@ -65,6 +65,11 @@ class HiveMind(nn.Module):
 
     Coordinates a swarm of 10 specialized agents using a sparse MoE architecture.
     Handles data encoding, routing via Noisy Gating, and result aggregation.
+    
+    **Thread Safety:** This module is NOT thread-safe. The `is_active` flags on
+    experts are modified during forward passes. Use a single HiveMind instance
+    per thread, or add external synchronization (e.g., threading.Lock) if
+    concurrent forward passes are required.
     """
     def __init__(self, observation_dim: int = 64):
         super().__init__()

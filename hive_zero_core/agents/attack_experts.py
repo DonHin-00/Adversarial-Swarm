@@ -147,13 +147,30 @@ class MutatorAgent(BaseExpert):
         with torch.no_grad():
             # Bypass gating for internal dependencies to avoid zero tensors
             gen_out = self.generator._forward_impl(x, context)
+            
+            # Defensive check: ensure tokenizer is available
+            if not hasattr(self.generator, 'tokenizer') or self.generator.tokenizer is None:
+                self.logger.error("Generator tokenizer not initialized")
+                return torch.zeros(1, x.size(-1), device=x.device)
+            
             # Decode T5 tokens to text and re-encode to BERT tokens to avoid vocab mismatch
             # gen_out shape: [Batch, Seq]
             gen_text = self.generator.tokenizer.batch_decode(gen_out, skip_special_tokens=True)
+            
+            # Defensive check: ensure sentinel tokenizer is available
+            if not hasattr(self.sentinel, 'tokenizer') or self.sentinel.tokenizer is None:
+                self.logger.error("Sentinel tokenizer not initialized")
+                return torch.zeros(1, x.size(-1), device=x.device)
+            
             # Re-encode for Sentinel (BERT)
             sentinel_inputs = self.sentinel.tokenizer(gen_text, return_tensors="pt", padding=True, truncation=True).to(x.device)
             initial_token_ids = sentinel_inputs["input_ids"]
 
+        # Defensive check: ensure backbone embeddings are available
+        if not hasattr(self.sentinel, 'backbone') or self.sentinel.backbone is None:
+            self.logger.error("Sentinel backbone not initialized")
+            return torch.zeros(1, x.size(-1), device=x.device)
+            
         embed_layer = self.sentinel.backbone.get_input_embeddings()
         current_embeddings = embed_layer(initial_token_ids).detach()
 
