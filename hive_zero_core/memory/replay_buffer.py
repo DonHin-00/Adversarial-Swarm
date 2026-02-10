@@ -63,8 +63,12 @@ class PrioritizedReplayBuffer:
         indices = np.random.choice(current_size, batch_size, p=probs)
         samples = [self.buffer[idx] for idx in indices]
         
-        # Validate all samples are non-None (should never happen with correct size tracking)
-        assert all(s is not None for s in samples), "Buffer contains None entries in valid range"
+        # Validate all samples are non-None (critical for buffer integrity)
+        if any(s is None for s in samples):
+            raise RuntimeError(
+                f"Buffer integrity violation: None entries found in valid range. "
+                f"Size={self.size}, Pos={self.pos}, Sampled indices={indices}"
+            )
 
         # Importance Sampling (IS) weights to correct for bias
         # w_i = (1/N * 1/P(i))^beta

@@ -121,26 +121,30 @@ class MutatorAgent(BaseExpert):
         self.sentinel = sentinel_expert
         self.generator = generator_expert
     
-    def _validate_dependencies(self) -> bool:
+    def _validate_dependencies(self) -> None:
         """
         Validates that required dependencies (tokenizers, models) are initialized.
         
-        Returns:
-            True if all dependencies are available, False otherwise
+        Raises:
+            RuntimeError: If any required dependency is not properly initialized
         """
         if not hasattr(self.generator, 'tokenizer') or self.generator.tokenizer is None:
-            self.logger.error("Generator tokenizer not initialized")
-            return False
+            raise RuntimeError(
+                "Generator tokenizer not initialized. Ensure PayloadGenAgent "
+                "was constructed successfully before using MutatorAgent."
+            )
         
         if not hasattr(self.sentinel, 'tokenizer') or self.sentinel.tokenizer is None:
-            self.logger.error("Sentinel tokenizer not initialized")
-            return False
+            raise RuntimeError(
+                "Sentinel tokenizer not initialized. Ensure SentinelAgent "
+                "was constructed successfully before using MutatorAgent."
+            )
         
         if not hasattr(self.sentinel, 'backbone') or self.sentinel.backbone is None:
-            self.logger.error("Sentinel backbone not initialized")
-            return False
-        
-        return True
+            raise RuntimeError(
+                "Sentinel backbone not initialized. Ensure SentinelAgent "
+                "was constructed successfully before using MutatorAgent."
+            )
 
     def _inner_loop_search(self, embedding: torch.Tensor, iterations: int = 5) -> torch.Tensor:
         # embedding: [1, seq, dim]
@@ -164,9 +168,8 @@ class MutatorAgent(BaseExpert):
         return optimized_emb.detach()
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # Validate dependencies before proceeding
-        if not self._validate_dependencies():
-            return torch.zeros(1, x.size(-1), device=x.device)
+        # Validate dependencies before proceeding (raises RuntimeError if invalid)
+        self._validate_dependencies()
         
         # 1. Base Generation
         with torch.no_grad():

@@ -78,15 +78,26 @@ class HeteroLogEncoder(nn.Module):
             # Validate and clamp port to valid range
             try:
                 dport = int(log.get('port', 0))
+                if dport < 0 or dport > 65535:
+                    logging.getLogger(__name__).warning(
+                        f"Port {dport} out of range [0, 65535], clamping to valid range"
+                    )
                 dport = max(0, min(dport, 65535))  # Clamp to valid port range
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                logging.getLogger(__name__).warning(f"Invalid port value: {e}, using default 0")
                 dport = 0
             
-            # Validate and clamp protocol to valid range for embedding (0-255)
+            # Validate and clamp protocol to valid range for IP protocol field (0-255)
+            # The protocol number is an 8-bit field in the IP header, thus limited to 0-255
             try:
                 proto = int(log.get('proto', 6))
+                if proto < 0 or proto > 255:
+                    logging.getLogger(__name__).warning(
+                        f"Protocol {proto} out of range [0, 255], clamping to valid range"
+                    )
                 proto = max(0, min(proto, 255))  # Clamp to valid protocol range
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                logging.getLogger(__name__).warning(f"Invalid protocol value: {e}, using default 6 (TCP)")
                 proto = 6  # Default to TCP
 
             s_idx = self._get_idx(src_ip, local_ip_map)
