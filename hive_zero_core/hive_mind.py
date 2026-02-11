@@ -1,9 +1,8 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple, Any
 from hive_zero_core.utils.logging_config import setup_logger
 from hive_zero_core.memory.graph_store import LogEncoder
 from hive_zero_core.memory.foundation import KnowledgeLoader, WeightInitializer
@@ -15,6 +14,7 @@ from hive_zero_core.agents.defense_experts import Agent_Tarpit
 from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
 from hive_zero_core.agents.blue_team import Agent_WAF, Agent_EDR, Agent_SIEM, Agent_IDS
 from hive_zero_core.agents.red_booster import Agent_PreAttackBooster
+
 
 class GatingNetwork(nn.Module):
     """
@@ -108,6 +108,7 @@ class GatingNetwork(nn.Module):
             return torch.zeros(self.num_experts)
         return self._expert_counts / self._total_routes
 
+
 class HiveMind(nn.Module):
     def __init__(self, observation_dim: int = 64, pretrained: bool = False):
         super().__init__()
@@ -130,9 +131,11 @@ class HiveMind(nn.Module):
         # Cluster B: Attack
         self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
         self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)
-        self.expert_mutator = Agent_Mutator(observation_dim, action_dim=128,
-                                           sentinel_expert=self.expert_sentinel,
-                                           generator_expert=self.expert_payloadgen)
+        self.expert_mutator = Agent_Mutator(
+            observation_dim, action_dim=128,
+            sentinel_expert=self.expert_sentinel,
+            generator_expert=self.expert_payloadgen
+        )
 
         # Cluster C: Post-Exploit
         self.expert_mimic = Agent_Mimic(observation_dim, action_dim=2)

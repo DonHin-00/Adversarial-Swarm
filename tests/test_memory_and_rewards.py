@@ -1,7 +1,6 @@
 """Unit tests for memory components: LogEncoder, SyntheticExperienceGenerator, rewards."""
 
 import torch
-import pytest
 
 
 class TestLogEncoder:

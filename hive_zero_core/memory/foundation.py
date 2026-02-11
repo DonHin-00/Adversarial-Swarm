@@ -1,9 +1,7 @@
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 
 import torch
 import torch.nn as nn
-import numpy as np
-from typing import List, Dict, Any, Tuple, Optional
 
 
 class SyntheticExperienceGenerator:

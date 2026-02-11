@@ -1,7 +1,6 @@
 """Unit tests for blue team, red booster, and threat intel database."""
 
 import torch
-import pytest
 
 
 # ======================================================================

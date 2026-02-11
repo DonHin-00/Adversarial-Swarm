@@ -49,7 +49,7 @@ single training loop; no locks are required.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple, Dict, Any
+from typing import Tuple, Dict, Any
 
 
 class ThreatIntelDB(nn.Module):
