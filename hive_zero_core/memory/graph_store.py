@@ -38,7 +38,6 @@ class HeteroLogEncoder(nn.Module):
 
         local_ip_map: Dict[str, int] = {}
         local_port_map: Dict[int, int] = {}
-        local_proto_map: Dict[int, int] = {}
         local_tech_map: Dict[str, int] = {}
 
         ip_src, ip_dst = [], []
