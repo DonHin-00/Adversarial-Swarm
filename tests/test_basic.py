@@ -18,20 +18,23 @@ def test_import_hive_mind():
 
 
 def test_hive_mind_initialization(observation_dim):
-    """Test that HiveMind can be initialized."""
+    """Test that HiveMind can be initialized without HF models."""
     from hive_zero_core.hive_mind import HiveMind
 
-    hive = HiveMind(observation_dim=observation_dim, pretrained=False)
+    hive = HiveMind(observation_dim=observation_dim, pretrained=False,
+                    load_hf_models=False)
     assert hive is not None
     assert hive.observation_dim == observation_dim
-    assert len(hive.experts) == 14
+    # 19 total experts minus 3 HF-dependent (Sentinel, PayloadGen, Mutator) = 16
+    assert len(hive.experts) == 16
 
 
 def test_hive_mind_forward_pass(observation_dim):
-    """Test that HiveMind forward pass works."""
+    """Test that HiveMind forward pass works without HF models."""
     from hive_zero_core.hive_mind import HiveMind
 
-    hive = HiveMind(observation_dim=observation_dim, pretrained=False)
+    hive = HiveMind(observation_dim=observation_dim, pretrained=False,
+                    load_hf_models=False)
 
     # Create dummy log data
     raw_logs = [

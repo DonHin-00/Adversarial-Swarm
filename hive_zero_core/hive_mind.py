@@ -110,7 +110,8 @@ class GatingNetwork(nn.Module):
 
 
 class HiveMind(nn.Module):
-    def __init__(self, observation_dim: int = 64, pretrained: bool = False):
+    def __init__(self, observation_dim: int = 64, pretrained: bool = False,
+                 load_hf_models: bool = True):
         super().__init__()
         self.logger = setup_logger("HiveMind")
         self.observation_dim = observation_dim
@@ -128,14 +129,19 @@ class HiveMind(nn.Module):
         self.expert_deepscope = Agent_DeepScope(observation_dim, action_dim=10)
         self.expert_chronos = Agent_Chronos(1, action_dim=1)
 
-        # Cluster B: Attack
-        self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
-        self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)
-        self.expert_mutator = Agent_Mutator(
-            observation_dim, action_dim=128,
-            sentinel_expert=self.expert_sentinel,
-            generator_expert=self.expert_payloadgen
-        )
+        # Cluster B: Attack (HF-dependent experts)
+        if load_hf_models:
+            self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
+            self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)
+            self.expert_mutator = Agent_Mutator(
+                observation_dim, action_dim=128,
+                sentinel_expert=self.expert_sentinel,
+                generator_expert=self.expert_payloadgen
+            )
+        else:
+            self.expert_sentinel = None
+            self.expert_payloadgen = None
+            self.expert_mutator = None
 
         # Cluster C: Post-Exploit
         self.expert_mimic = Agent_Mimic(observation_dim, action_dim=2)
@@ -167,26 +173,30 @@ class HiveMind(nn.Module):
         ])
 
         # Order matters for indexing in GatingNetwork outputs
+        # HF-dependent experts are excluded when load_hf_models=False
+        hf_experts = [e for e in [
+            self.expert_payloadgen,
+            self.expert_mutator,
+            self.expert_sentinel,
+        ] if e is not None]
         self.experts = nn.ModuleList([
-            self.expert_cartographer,  # 0   Recon
-            self.expert_deepscope,     # 1   Recon
-            self.expert_chronos,       # 2   Recon
-            self.expert_payloadgen,    # 3   Attack
-            self.expert_mutator,       # 4   Attack
-            self.expert_sentinel,      # 5   Attack
-            self.expert_mimic,         # 6   Post-Exploit
-            self.expert_ghost,         # 7   Post-Exploit
-            self.expert_stego,         # 8   Post-Exploit
-            self.expert_cleaner,       # 9   Post-Exploit
-            self.expert_tarpit,        # 10  Active Defense
-            self.expert_feedback,      # 11  Kill Chain
-            self.expert_flashbang,     # 12  Kill Chain
-            self.expert_glasshouse,    # 13  Kill Chain
-            self.expert_waf,           # 14  Blue Team
-            self.expert_edr,           # 15  Blue Team
-            self.expert_siem,          # 16  Blue Team
-            self.expert_ids,           # 17  Blue Team
-            self.expert_booster,       # 18  Red Booster
+            self.expert_cartographer,  # Recon
+            self.expert_deepscope,     # Recon
+            self.expert_chronos,       # Recon
+            *hf_experts,               # Attack (when loaded)
+            self.expert_mimic,         # Post-Exploit
+            self.expert_ghost,         # Post-Exploit
+            self.expert_stego,         # Post-Exploit
+            self.expert_cleaner,       # Post-Exploit
+            self.expert_tarpit,        # Active Defense
+            self.expert_feedback,      # Kill Chain
+            self.expert_flashbang,     # Kill Chain
+            self.expert_glasshouse,    # Kill Chain
+            self.expert_waf,           # Blue Team
+            self.expert_edr,           # Blue Team
+            self.expert_siem,          # Blue Team
+            self.expert_ids,           # Blue Team
+            self.expert_booster,       # Red Booster
         ])
 
         # 4. Gating Mechanism

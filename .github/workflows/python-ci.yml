@@ -61,3 +61,7 @@ jobs:
     - name: Compile all Python files
       run: |
         python -m compileall hive_zero_core -q
+
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -x -q --tb=short
