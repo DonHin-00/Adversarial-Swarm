@@ -1,4 +1,4 @@
-"""Training utilities for the HiveMind system."""
+"""Training infrastructure for the HIVE-ZERO system."""
 
 from hive_zero_core.training.adversarial_loop import (
     load_checkpoint,

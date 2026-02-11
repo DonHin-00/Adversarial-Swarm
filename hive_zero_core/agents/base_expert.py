@@ -9,9 +9,15 @@ from hive_zero_core.utils.logging_config import setup_logger
 
 
 class BaseExpert(nn.Module, ABC):
-    def __init__(
-        self, observation_dim: int, action_dim: int, name: str = "BaseExpert", hidden_dim: int = 64
-    ):
+    """
+    Abstract base class for all HIVE-ZERO expert agents.
+
+    Provides standardized forward-pass gating (Sparse MoE enforcement),
+    input validation, graceful error handling, dynamic shape adaptation,
+    and gradient checkpointing support for memory-efficient training.
+    """
+
+    def __init__(self, observation_dim: int, action_dim: int, name: str = "BaseExpert", hidden_dim: int = 64):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
@@ -22,15 +28,28 @@ class BaseExpert(nn.Module, ABC):
         # Gating Logic
         self.is_active = False
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        context: Optional[torch.Tensor] = None,
-        mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+        # Step counter for diagnostics and scheduling
+        self._step_count = 0
+
+        # Gradient checkpointing flag (reduces VRAM at cost of compute)
+        self._use_checkpoint = False
+
+    def enable_checkpointing(self):
+        """Enable gradient checkpointing for memory-efficient training."""
+        self._use_checkpoint = True
+
+    def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Standardized forward pass for all experts.
         Enforces Gating Logic (Sparse MoE).
+
+        Args:
+            x: Input tensor, typically [batch, dim] or [batch, seq, dim].
+            context: Optional context tensor (e.g. edge_index for graph experts).
+            mask: Optional binary mask tensor for action masking.
+
+        Returns:
+            Output tensor of shape [batch, action_dim].
         """
         # Hardening: Input validation
         if not isinstance(x, torch.Tensor):
@@ -42,7 +61,17 @@ class BaseExpert(nn.Module, ABC):
             batch_size = x.size(0)
             return torch.zeros((batch_size, self.action_dim), device=x.device)
 
+        self._step_count += 1
+
         try:
+            if self._use_checkpoint and self.training:
+                # Wrap non-Tensor args (context, mask may be None) in a closure
+                # to avoid checkpoint errors with non-Tensor inputs.
+                def _run_forward_impl(input_x: torch.Tensor) -> torch.Tensor:
+                    return self._forward_impl(input_x, context, mask)
+                return torch.utils.checkpoint.checkpoint(
+                    _run_forward_impl, x, use_reentrant=False
+                )
             return self._forward_impl(x, context, mask)
         except Exception as e:
             self.logger.error(f"Error in {self.name} forward pass: {str(e)}")
@@ -56,32 +85,30 @@ class BaseExpert(nn.Module, ABC):
         pass
 
     def log_step(self, metrics: Dict[str, Any]):
-        self.logger.info(f"Step Metrics: {metrics}")
+        self.logger.info(f"[step={self._step_count}] Metrics: {metrics}")
 
     def ensure_dimension(self, x: torch.Tensor, target_dim: int) -> torch.Tensor:
         """
-        Dynamic Shape Adapter: Ensures x matches target_dim/shape requirements.
-        Useful for bridging mismatches between Agents (e.g., Mutator -> Sentinel).
+        Dynamic Shape Adapter: Ensures the last dimension of x matches target_dim.
+        Handles 2D [Batch, Dim] and 3D [Batch, Seq, Dim] inputs by padding or
+        truncating the feature dimension.
         """
         if x.dim() == 2:
-            # [Batch, Dim]
             current_dim = x.size(1)
             if current_dim == target_dim:
                 return x
             elif current_dim < target_dim:
-                # Pad
                 padding = target_dim - current_dim
                 return F.pad(x, (0, padding), "constant", 0)
             else:
-                # Truncate
                 return x[:, :target_dim]
         elif x.dim() == 3:
-            # [Batch, Seq, Dim] -> Flatten or slice depending on need.
-            # For simplicity, if we need [Batch, Dim], we pool or slice.
-            # If we need [Batch, Seq, Dim], we pad dim.
-            if target_dim == x.size(-1):
+            current_dim = x.size(-1)
+            if current_dim == target_dim:
                 return x
-            # Fallback implementation for prototype stability
-            return x
-
+            elif current_dim < target_dim:
+                padding = target_dim - current_dim
+                return F.pad(x, (0, padding), "constant", 0)
+            else:
+                return x[:, :, :target_dim]
         return x

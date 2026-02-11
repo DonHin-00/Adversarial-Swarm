@@ -3,58 +3,100 @@ import torch.nn.functional as F
 
 
 class CompositeReward:
-    def __init__(self, w_adv: float = 1.0, w_info: float = 0.5, w_stealth: float = 0.8):
+    """
+    Multi-objective reward function combining adversarial evasion, information
+    gain, stealth (traffic mimicry), and temporal efficiency components.
+
+    Attributes:
+        w_adv:      Weight for adversarial evasion reward.
+        w_info:     Weight for information-gain reward.
+        w_stealth:  Weight for traffic-stealth reward.
+        w_temporal: Weight for temporal-efficiency reward.
+    """
+
+    def __init__(self, w_adv: float = 1.0, w_info: float = 0.5,
+                 w_stealth: float = 0.8, w_temporal: float = 0.3):
         self.w_adv = w_adv
         self.w_info = w_info
         self.w_stealth = w_stealth
+        self.w_temporal = w_temporal
+
+    # ------------------------------------------------------------------
+    # Individual reward components
+    # ------------------------------------------------------------------
 
     def calculate_adversarial_reward(self, sentinel_score: torch.Tensor) -> torch.Tensor:
         """
-        R_adv: Maximize probability of evasion (1 - Sentinel Score)
-        Sentinel Score: P(Blocked) [Index 0] or P(Allowed) [Index 1]?
-        Sentinel output from forward() is typically P(Allowed) in our impl.
-        Wait, Sentinel classifies [Blocked, Allowed].
-        If Payload is Allowed, Score -> 1. We want to MAXIMIZE this.
-
-        So R_adv = P(Allowed).
+        R_adv = P(Allowed).  Sentinel outputs logits [Blocked, Allowed];
+        the caller should pass the softmaxed P(Allowed) column.
         """
-        # Ensure input is prob, not logit
         return sentinel_score
 
     def calculate_info_gain_reward(self, prev_entropy: float, current_entropy: float) -> float:
         """
-        R_info: Reduction in entropy of Knowledge Graph.
-        Gain = Prev - Current.
+        R_info: positive reward when Knowledge-Graph entropy decreases.
         """
         gain = prev_entropy - current_entropy
-        return max(0.0, gain)  # Reward positive gain only
+        return max(0.0, gain)
 
-    def calculate_stealth_reward(
-        self, traffic_dist: torch.Tensor, baseline_dist: torch.Tensor
-    ) -> torch.Tensor:
+    def calculate_stealth_reward(self, traffic_dist: torch.Tensor,
+                                 baseline_dist: torch.Tensor) -> torch.Tensor:
         """
-        R_stealth: Minimize KL Divergence between generated traffic and baseline.
-        Reward = -KL(P || Q)
-        """
-        # Assume distributions are categorical or Gaussian params?
-        # For prototype, assume simple MSE or negative distance if continuous
-        # Or KL if prob distributions.
+        R_stealth = −KL(traffic ‖ baseline).
 
-        # Hardening: Check shapes
+        Both inputs are expected to be un-normalised probabilities (or
+        probability vectors).  They are clamped to [1e-8, ∞) before the
+        log to prevent NaN/Inf.
+        """
         if traffic_dist.shape != baseline_dist.shape:
-            # Fallback
-            return torch.tensor(0.0)
+            return torch.tensor(0.0, device=traffic_dist.device,
+                                dtype=traffic_dist.dtype)
 
-        # KL Divergence (assuming log_probs input for P? or probs?)
-        # Let's assume input is probs.
-        kl = F.kl_div(traffic_dist.log(), baseline_dist, reduction="batchmean")
-        return -kl  # Maximize negative KL (minimize divergence)
+        # Clamp, then normalise to valid probability distributions so that
+        # KL(P||Q) is well-defined even for un-normalised inputs.
+        traffic_clamped = torch.clamp(traffic_dist, min=1e-8)
+        baseline_clamped = torch.clamp(baseline_dist, min=1e-8)
 
-    def compute(self, adv_score, info_gain, traffic_dist, baseline_dist) -> torch.Tensor:
+        traffic_norm = traffic_clamped / traffic_clamped.sum(dim=-1, keepdim=True)
+        baseline_norm = baseline_clamped / baseline_clamped.sum(dim=-1, keepdim=True)
+
+        traffic_log = torch.log(traffic_norm)
+        kl = F.kl_div(traffic_log, baseline_norm, reduction='batchmean')
+        return -kl
+
+    def calculate_temporal_reward(self, elapsed_steps: int,
+                                  budget: int = 100) -> float:
+        """
+        R_temporal: rewards faster completion.
+
+        Returns a value in (0, 1] that decays linearly as elapsed_steps
+        approaches the budget.
+        """
+        return max(0.0, 1.0 - elapsed_steps / max(budget, 1))
+
+    # ------------------------------------------------------------------
+    # Composite
+    # ------------------------------------------------------------------
+
+    def compute(self, adv_score: torch.Tensor, info_gain: float,
+                traffic_dist: torch.Tensor, baseline_dist: torch.Tensor,
+                elapsed_steps: int = 0, step_budget: int = 100) -> torch.Tensor:
+        """Weighted sum of all reward components.
+
+        Converts scalar float rewards to tensors on the same device as
+        ``adv_score`` before summing, ensuring clean gradient flow.
+        """
+        device = adv_score.device
+        dtype = adv_score.dtype
+
         r_adv = self.calculate_adversarial_reward(adv_score)
-        r_info = info_gain
         r_stealth = self.calculate_stealth_reward(traffic_dist, baseline_dist)
+        r_temporal = self.calculate_temporal_reward(elapsed_steps, step_budget)
 
-        # Normalize?
-        total = (self.w_adv * r_adv) + (self.w_info * r_info) + (self.w_stealth * r_stealth)
+        total = (
+            self.w_adv * r_adv
+            + self.w_info * torch.tensor(info_gain, device=device, dtype=dtype)
+            + self.w_stealth * r_stealth
+            + self.w_temporal * torch.tensor(r_temporal, device=device, dtype=dtype)
+        )
         return total

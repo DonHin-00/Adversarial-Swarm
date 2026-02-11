@@ -31,12 +31,12 @@ def test_adversarial_reward():
     # High evasion probability should give high reward
     high_score = torch.tensor([0.9])
     reward = reward_calc.calculate_adversarial_reward(high_score)
-    assert reward.item() == 0.9
+    assert reward.item() == pytest.approx(0.9)
     
     # Low evasion probability should give low reward
     low_score = torch.tensor([0.1])
     reward = reward_calc.calculate_adversarial_reward(low_score)
-    assert reward.item() == 0.1
+    assert reward.item() == pytest.approx(0.1)
 
 
 def test_info_gain_reward_positive():
