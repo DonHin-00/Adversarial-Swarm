@@ -54,7 +54,6 @@ class Agent_FeedbackLoop(BaseExpert):
         return self.norm(fused)
 
 
-
 class Agent_Flashbang(BaseExpert):
     """
     Expert 13: Adaptive Burst-Schedule Overloader

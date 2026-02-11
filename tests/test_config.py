@@ -3,7 +3,6 @@ Tests for training configuration management.
 """
 
 import pytest
-from pathlib import Path
 
 from hive_zero_core.training.config import (
     DataConfig,
@@ -49,17 +48,17 @@ def test_data_config_defaults():
 def test_experiment_config_initialization():
     """Test ExperimentConfig initialization and validation."""
     config = ExperimentConfig()
-    
+
     # Check that sub-configs are initialized
     assert isinstance(config.model, ModelConfig)
     assert isinstance(config.training, TrainingConfig)
     assert isinstance(config.data, DataConfig)
-    
+
     # Check experiment settings
     assert config.experiment_name == "adversarial_swarm_experiment"
     assert config.seed == 42
     assert config.device == "auto"
-    
+
     # Check that directories are created
     assert config.output_dir.exists()
     assert config.training.checkpoint_dir.exists()
@@ -70,15 +69,15 @@ def test_experiment_config_validation():
     # Valid config should work
     config = ExperimentConfig()
     assert config.model.observation_dim > 0
-    
+
     # Invalid observation_dim should raise error
     with pytest.raises(AssertionError):
         ExperimentConfig(model=ModelConfig(observation_dim=-1))
-    
+
     # Invalid action_dim should raise error
     with pytest.raises(AssertionError):
         ExperimentConfig(model=ModelConfig(action_dim=0))
-    
+
     # Invalid top_k should raise error
     with pytest.raises(AssertionError):
         ExperimentConfig(model=ModelConfig(top_k_experts=20))
@@ -88,7 +87,7 @@ def test_experiment_config_to_dict():
     """Test converting ExperimentConfig to dictionary."""
     config = ExperimentConfig()
     config_dict = config.to_dict()
-    
+
     assert "model" in config_dict
     assert "training" in config_dict
     assert "data" in config_dict
@@ -105,9 +104,9 @@ def test_experiment_config_from_dict():
         "experiment_name": "test_experiment",
         "seed": 123,
     }
-    
+
     config = ExperimentConfig.from_dict(config_dict)
-    
+
     assert config.model.observation_dim == 128
     assert config.model.action_dim == 256
     assert config.training.num_epochs == 20
@@ -146,14 +145,14 @@ def test_custom_config():
     model_config = ModelConfig(observation_dim=256, hidden_dim=128)
     training_config = TrainingConfig(num_epochs=50, learning_rate=0.0005)
     data_config = DataConfig(batch_size=16, num_synthetic_samples=500)
-    
+
     config = ExperimentConfig(
         model=model_config,
         training=training_config,
         data=data_config,
         experiment_name="custom_experiment",
     )
-    
+
     assert config.model.observation_dim == 256
     assert config.model.hidden_dim == 128
     assert config.training.num_epochs == 50

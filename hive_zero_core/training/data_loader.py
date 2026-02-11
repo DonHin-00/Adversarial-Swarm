@@ -53,7 +53,7 @@ class NetworkLogDataset:
     def _generate_synthetic_logs(self, num_samples: int) -> List[Dict]:
         """Generate synthetic network logs for training."""
         logs = []
-        
+
         # Common network patterns
         src_ips = [
             "192.168.1.1", "192.168.1.2", "192.168.1.100",

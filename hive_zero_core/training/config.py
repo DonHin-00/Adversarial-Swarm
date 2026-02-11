@@ -6,7 +6,7 @@ Centralizes all hyperparameters and training settings.
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,11 @@ class ModelConfig:
     hidden_dim: int = 64
     num_experts: int = 14
     pretrained: bool = False
-    
+
     # Expert-specific settings
     bert_model: str = "prajjwal1/bert-tiny"
     t5_model: str = "t5-small"
-    
+
     # Gating network settings
     gating_hidden_dim: int = 128
     top_k_experts: int = 3
@@ -37,26 +37,26 @@ class TrainingConfig:
     num_epochs: int = 10
     learning_rate: float = 0.001
     batch_size: int = 32
-    
+
     # Loss weights
     adversarial_weight: float = 1.0
     info_gain_weight: float = 0.5
     stealth_weight: float = 0.3
-    
+
     # Auxiliary loss weights
     l2_regularization: float = 0.01
     diversity_weight: float = 0.1
-    
+
     # Optimization settings
     optimizer: str = "adam"  # "adam", "sgd", "adamw"
     gradient_clip_norm: float = 1.0
     weight_decay: float = 0.0001
-    
+
     # Learning rate scheduling
     use_lr_scheduler: bool = True
     lr_scheduler_type: str = "cosine"  # "cosine", "step", "exponential"
     lr_warmup_epochs: int = 2
-    
+
     # Checkpoint settings
     checkpoint_dir: Path = field(default_factory=lambda: Path("checkpoints"))
     save_frequency: int = 5  # Save every N epochs
@@ -83,13 +83,13 @@ class ExperimentConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     data: DataConfig = field(default_factory=DataConfig)
-    
+
     # Experiment metadata
     experiment_name: str = "adversarial_swarm_experiment"
     output_dir: Path = field(default_factory=lambda: Path("outputs"))
     seed: int = 42
     device: str = "auto"  # "auto", "cuda", "cpu"
-    
+
     # Logging
     log_level: str = "INFO"
     log_frequency: int = 1  # Log every N batches
@@ -101,7 +101,7 @@ class ExperimentConfig:
         # Create directories
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.training.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Validate values
         assert self.model.observation_dim > 0, "observation_dim must be positive"
         assert self.model.action_dim > 0, "action_dim must be positive"
@@ -128,7 +128,7 @@ class ExperimentConfig:
         model_config = ModelConfig(**config_dict.get("model", {}))
         training_config = TrainingConfig(**config_dict.get("training", {}))
         data_config = DataConfig(**config_dict.get("data", {}))
-        
+
         return cls(
             model=model_config,
             training=training_config,

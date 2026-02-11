@@ -65,7 +65,6 @@ class Agent_Cartographer(BaseExpert):
         return h
 
 
-
 class Agent_DeepScope(BaseExpert):
     """
     Expert 2: Multi-Head Attention Constraint Masking

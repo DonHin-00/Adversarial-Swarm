@@ -1,6 +1,5 @@
 """Basic tests for the Adversarial-Swarm package."""
 
-import pytest
 import torch
 
 

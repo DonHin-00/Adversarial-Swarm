@@ -3,12 +3,10 @@ from pathlib import Path
 from typing import Optional
 
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.training.config import ExperimentConfig, get_default_config
-from hive_zero_core.training.data_loader import NetworkLogDataset
 from hive_zero_core.training.rewards import CompositeReward
 
 
@@ -54,7 +52,7 @@ def train_hive_mind_adversarial(
         config.training.num_epochs = num_epochs
     logger = logging.getLogger("HiveTraining")
     logger.setLevel(getattr(logging, config.log_level))
-    
+
     logger.info("=" * 80)
     logger.info("Starting HiveMind Adversarial Training")
     logger.info("=" * 80)
@@ -255,15 +253,13 @@ def load_checkpoint(
     return checkpoint['epoch']
 
 
-
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+
     # Quick test with 2 epochs
     from hive_zero_core.training.config import get_quick_test_config
     config = get_quick_test_config()
     train_hive_mind_adversarial(config=config)
-
