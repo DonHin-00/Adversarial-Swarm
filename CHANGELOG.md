@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pull request cleanup tools and documentation
+  - `scripts/close_duplicate_prs.sh` - Automated script to close duplicate PRs
+  - `scripts/cleanup_duplicate_prs.py` - Python tool to detect and analyze duplicate PRs
+  - `docs/PR_CLEANUP_REPORT.md` - Detailed analysis of duplicate PRs with recommendations
+  - `docs/PR_CLEANUP_SUMMARY.md` - Executive summary and execution guide
+  - `scripts/README.md` - Comprehensive documentation for all maintenance scripts
 - Comprehensive training infrastructure with configuration management system
   - `config.py` with ModelConfig, TrainingConfig, DataConfig, and ExperimentConfig
   - Hierarchical configuration with validation and presets
