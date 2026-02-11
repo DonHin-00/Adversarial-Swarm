@@ -13,3 +13,7 @@
 ## 2026-02-08 - Secrets Management
 **Learning:** Never print sensitive keys to stdout, even in "helpful" startup banners. CodeQL flags this immediately.
 **Action:** Always redact or omit secrets in logs.
+
+## 2026-02-08 - Automated Workflows vs. Agent Constraints
+**Learning:** Users may expect agents to behave like stateless bots (opening new PRs on command). Agents bound to stateful sessions must communicate their limitations clearly and persist on the current branch.
+**Action:** When asked to "open a new PR", politely explain the single-session constraint and continue working on the current branch.
