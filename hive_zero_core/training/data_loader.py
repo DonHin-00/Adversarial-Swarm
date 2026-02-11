@@ -3,6 +3,8 @@ Data loading utilities for training the HiveMind system.
 Supports both real network logs and synthetic data generation.
 """
 
+import csv
+import json
 import logging
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Union
@@ -85,15 +87,86 @@ class NetworkLogDataset:
     def _load_from_file(self, filepath: Union[str, Path]) -> List[Dict]:
         """
         Load network logs from a file.
-        Supports common log formats (placeholder for future implementation).
+        Supports JSON, JSONL, and CSV formats.
+
+        JSON format: {"logs": [{...}, {...}]} or [{...}, {...}]
+        JSONL format: One JSON object per line
+        CSV format: Headers in first row
+
+        Expected fields: src_ip, dst_ip, port, proto, timestamp (optional)
         """
-        # Placeholder for real file loading
-        # In production, this would parse actual log files (CSV, JSON, PCAP, etc.)
-        logger.warning(
-            "Real file loading not yet implemented. "
-            "Falling back to synthetic data generation."
-        )
-        return self._generate_synthetic_logs(self.num_synthetic_samples)
+        filepath = Path(filepath)
+
+        if not filepath.exists():
+            logger.warning(f"File not found: {filepath}. Using synthetic data.")
+            return self._generate_synthetic_logs(self.num_synthetic_samples)
+
+        try:
+            # Detect format by extension
+            suffix = filepath.suffix.lower()
+
+            if suffix == ".json":
+                return self._load_json(filepath)
+            elif suffix == ".jsonl":
+                return self._load_jsonl(filepath)
+            elif suffix == ".csv":
+                return self._load_csv(filepath)
+            else:
+                logger.warning(
+                    f"Unsupported file format: {suffix}. "
+                    f"Supported formats: .json, .jsonl, .csv. "
+                    f"Using synthetic data."
+                )
+                return self._generate_synthetic_logs(self.num_synthetic_samples)
+
+        except Exception as e:
+            logger.error(f"Error loading file {filepath}: {e}. Using synthetic data.")
+            return self._generate_synthetic_logs(self.num_synthetic_samples)
+
+    def _load_json(self, filepath: Path) -> List[Dict]:
+        """Load logs from JSON file."""
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+
+        # Handle both {"logs": [...]} and [...] formats
+        if isinstance(data, dict) and "logs" in data:
+            logs = data["logs"]
+        elif isinstance(data, list):
+            logs = data
+        else:
+            logger.warning(f"Unexpected JSON structure in {filepath}")
+            return []
+
+        logger.info(f"Loaded {len(logs)} logs from JSON file {filepath}")
+        return logs
+
+    def _load_jsonl(self, filepath: Path) -> List[Dict]:
+        """Load logs from JSONL file (one JSON object per line)."""
+        logs = []
+        with open(filepath, 'r') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    log = json.loads(line)
+                    logs.append(log)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Invalid JSON on line {line_num}: {e}")
+
+        logger.info(f"Loaded {len(logs)} logs from JSONL file {filepath}")
+        return logs
+
+    def _load_csv(self, filepath: Path) -> List[Dict]:
+        """Load logs from CSV file."""
+        logs = []
+        with open(filepath, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                logs.append(dict(row))
+
+        logger.info(f"Loaded {len(logs)} logs from CSV file {filepath}")
+        return logs
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset."""

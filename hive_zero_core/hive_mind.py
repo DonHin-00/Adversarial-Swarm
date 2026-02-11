@@ -272,8 +272,9 @@ class HiveMind(nn.Module):
                     results["constraints"] = out
 
                 elif expert.name == "Chronos":
-                    dummy_times = torch.randn(1, 10, device=global_state.device)
-                    out = expert(dummy_times)
+                    # Extract inter-arrival times from log encoder
+                    inter_arrival_times = self.log_encoder.get_inter_arrival_times(max_len=100)
+                    out = expert(inter_arrival_times)
                     results["timing"] = out
 
                 elif expert.name == "PayloadGen":
@@ -297,8 +298,8 @@ class HiveMind(nn.Module):
                     results["hiding_spot"] = out
 
                 elif expert.name == "Stego":
-                    dummy_data = torch.rand(1, self.observation_dim, device=global_state.device)
-                    out = expert(dummy_data)
+                    # Use global state for steganographic embedding
+                    out = expert(global_state)
                     results["covert_channel"] = out
 
                 elif expert.name == "Cleaner":

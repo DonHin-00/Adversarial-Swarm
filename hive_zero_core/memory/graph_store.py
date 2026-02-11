@@ -1,6 +1,7 @@
 import ipaddress
 import logging
-from typing import Dict, List
+from datetime import datetime
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -29,6 +30,10 @@ class LogEncoder(nn.Module):
         self.idx_to_ip: Dict[int, str] = {}
         self.next_idx = 0
 
+        # Temporal tracking for Chronos agent
+        self.timestamps: List[float] = []
+        self.last_timestamp: Optional[float] = None
+
     def _ip_to_bits(self, ip_str: str) -> torch.Tensor:
         try:
             ip_int = int(ipaddress.IPv4Address(ip_str))
@@ -48,11 +53,35 @@ class LogEncoder(nn.Module):
             self.next_idx += 1
         return self.ip_to_idx[ip]
 
+    def _parse_timestamp(self, timestamp_str: str) -> Optional[float]:
+        """
+        Parse timestamp string to Unix epoch time.
+        Supports ISO 8601 format and common variations.
+        """
+        if not timestamp_str:
+            return None
+        try:
+            # Try ISO 8601 format
+            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            return dt.timestamp()
+        except (ValueError, AttributeError):
+            # Try other common formats
+            for fmt in ["%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"]:
+                try:
+                    dt = datetime.strptime(timestamp_str, fmt)
+                    return dt.timestamp()
+                except ValueError:
+                    continue
+            logger.debug(f"Could not parse timestamp: {timestamp_str}")
+            return None
+
     def reset(self):
         """Clear the IP-to-index mapping to free memory between episodes."""
         self.ip_to_idx.clear()
         self.idx_to_ip.clear()
         self.next_idx = 0
+        self.timestamps.clear()
+        self.last_timestamp = None
 
     def _empty_graph(self) -> Data:
         """Return a zero-node graph on the module's device."""
@@ -89,6 +118,13 @@ class LogEncoder(nn.Module):
             dst = log.get("dst_ip", "0.0.0.0")
             port = log.get("port", 0)
             proto = log.get("proto", 6)  # TCP default
+
+            # Extract and track timestamp if present
+            if "timestamp" in log:
+                ts = self._parse_timestamp(log["timestamp"])
+                if ts is not None:
+                    self.timestamps.append(ts)
+                    self.last_timestamp = ts
 
             # Input Validation Hardening
             try:
@@ -152,3 +188,31 @@ class LogEncoder(nn.Module):
         )  # [num_edges, edge_feature_dim * 2]
 
         return Data(x=x_embedded, edge_index=edge_index, edge_attr=edge_attr)
+
+    def get_inter_arrival_times(self, max_len: int = 100) -> torch.Tensor:
+        """
+        Extract inter-arrival times from tracked timestamps for temporal analysis.
+
+        Args:
+            max_len: Maximum sequence length to return
+
+        Returns:
+            Tensor of inter-arrival times [1, seq_len] suitable for Chronos agent.
+            Returns sequence of zeros if insufficient timestamps available.
+        """
+        device = self.ip_projection.weight.device
+
+        if len(self.timestamps) < 2:
+            # Not enough data, return zeros
+            return torch.zeros(1, min(max_len, 10), device=device)
+
+        # Compute inter-arrival times (differences between consecutive timestamps)
+        times = sorted(self.timestamps[-max_len:])  # Use most recent timestamps
+        inter_arrivals = [times[i+1] - times[i] for i in range(len(times) - 1)]
+
+        # Convert to tensor
+        if inter_arrivals:
+            inter_arrival_tensor = torch.tensor(inter_arrivals, dtype=torch.float32, device=device)
+            return inter_arrival_tensor.unsqueeze(0)  # [1, seq_len]
+        else:
+            return torch.zeros(1, 10, device=device)
