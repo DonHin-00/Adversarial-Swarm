@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Any, Tuple, Optional
 
 class PrioritizedReplayBuffer:
     def __init__(self, capacity: int = 10000, alpha: float = 0.6):
@@ -11,15 +11,17 @@ class PrioritizedReplayBuffer:
         self.pos = 0
 
     def push(self, state, action, reward, next_state, priority: Optional[float] = None):
-        max_prio = self.priorities.max() if self.buffer else 1.0
-
         if len(self.buffer) < self.capacity:
             self.buffer.append((state, action, reward, next_state))
         else:
             self.buffer[self.pos] = (state, action, reward, next_state)
 
-        # Use provided priority if given, otherwise use max_prio
-        self.priorities[self.pos] = priority if priority is not None else max_prio
+        # Use provided priority if given, otherwise compute max_prio
+        if priority is not None:
+            self.priorities[self.pos] = priority
+        else:
+            max_prio = self.priorities.max() if self.buffer else 1.0
+            self.priorities[self.pos] = max_prio
         self.pos = (self.pos + 1) % self.capacity
 
     def sample(self, batch_size: int, beta: float = 0.4) -> Tuple[List[Any], np.ndarray, torch.Tensor]:
