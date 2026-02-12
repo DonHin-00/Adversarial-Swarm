@@ -6,6 +6,7 @@ import torch.optim as optim
 from transformers import AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer
 
 from hive_zero_core.agents.base_expert import BaseExpert
+from hive_zero_core.agents.genetic_evolution import GeneticEvolution
 
 
 def _quantize_to_ids(x: torch.Tensor, vocab_size: int, scale: int = 1000) -> torch.Tensor:
@@ -100,23 +101,36 @@ class Agent_PayloadGen(BaseExpert):
 
 class Agent_Mutator(BaseExpert):
     """
-    Expert 5: Adversarial Payload Optimiser
+    Expert 5: Adversarial Payload Optimiser with Genetic Evolution
 
     Iteratively obfuscates a generated payload to maximise the probability
     of evading the Sentinel classifier.  Uses gradient-based embedding-space
     search with Adam (upgraded from SGD) and configurable optimisation steps.
     Log-softmax is used for numerically stable loss computation.
+
+    Enhanced with genetic evolution capabilities:
+    - Polymorphic engine for signature evasion
+    - Natural selection for payload validation
+    - Generation tracking for evolution monitoring
     """
 
     def __init__(self, observation_dim: int, action_dim: int,
                  sentinel_expert: BaseExpert, generator_expert: BaseExpert,
-                 hidden_dim: int = 64, k_steps: int = 5, lr: float = 0.05):
+                 hidden_dim: int = 64, k_steps: int = 5, lr: float = 0.05,
+                 enable_evolution: bool = True):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
 
         self.sentinel = sentinel_expert
         self.generator = generator_expert
         self.k_steps = k_steps
         self.lr = lr
+
+        # Genetic Evolution Engine
+        self.enable_evolution = enable_evolution
+        if enable_evolution:
+            self.evolution_engine = GeneticEvolution(max_generations=100)
+        else:
+            self.evolution_engine = None
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
                       mask: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -172,3 +186,69 @@ class Agent_Mutator(BaseExpert):
         # 4. Flatten and adapt to action_dim
         flat = best_embeddings.view(x.size(0), -1)
         return self.ensure_dimension(flat, self.action_dim)
+
+    def evolve_payload_text(self, payload_text: str, max_attempts: int = 10) -> tuple:
+        """
+        Apply genetic evolution to a text payload for signature evasion.
+
+        Args:
+            payload_text: Original payload string
+            max_attempts: Maximum mutation attempts
+
+        Returns:
+            Tuple of (mutated_payload, gene_seed, success)
+        """
+        if not self.enable_evolution or self.evolution_engine is None:
+            self.logger.warning("Genetic evolution not enabled")
+            return payload_text, 0, False
+
+        mutated, gene_seed, success = self.evolution_engine.evolve_payload(
+            payload_text, max_attempts=max_attempts
+        )
+
+        if success:
+            self.logger.info(f"Payload evolved successfully (gen {self.evolution_engine.tracker.current_generation})")
+        else:
+            self.logger.warning("Payload evolution failed, using original")
+
+        return mutated, gene_seed, success
+
+    def evolve_code(self, source_code: str, max_attempts: int = 10) -> tuple:
+        """
+        Apply genetic evolution to Python source code for polymorphic capabilities.
+
+        Args:
+            source_code: Original Python source code
+            max_attempts: Maximum mutation attempts
+
+        Returns:
+            Tuple of (mutated_code, gene_seed, success)
+        """
+        if not self.enable_evolution or self.evolution_engine is None:
+            self.logger.warning("Genetic evolution not enabled")
+            return source_code, 0, False
+
+        mutated, gene_seed, success = self.evolution_engine.evolve_code(
+            source_code, max_attempts=max_attempts
+        )
+
+        if success:
+            self.logger.info(f"Code evolved successfully (gen {self.evolution_engine.tracker.current_generation})")
+        else:
+            self.logger.warning("Code evolution failed, using original")
+
+        return mutated, gene_seed, success
+
+    def get_evolution_stats(self) -> dict:
+        """
+        Get statistics about genetic evolution performance.
+
+        Returns:
+            Dictionary with evolution statistics
+        """
+        if not self.enable_evolution or self.evolution_engine is None:
+            return {'enabled': False}
+
+        stats = self.evolution_engine.get_stats()
+        stats['enabled'] = True
+        return stats
