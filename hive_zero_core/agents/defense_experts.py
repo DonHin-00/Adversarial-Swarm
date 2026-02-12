@@ -88,8 +88,18 @@ class Agent_Tarpit(BaseExpert):
         self.trap_proj = nn.Linear(action_dim, hidden_dim)
         self.obs_proj = nn.Linear(observation_dim, hidden_dim)
 
-        # Learnable 'Trap Selector' weights (soft attention)
-        self.attention = nn.Linear(observation_dim, self.num_traps)
+        # Multi-head cross-attention: observation attends over trap keys/values
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=hidden_dim, num_heads=attn_heads, batch_first=True
+        )
+        self.attn_norm = nn.LayerNorm(hidden_dim)
+
+        # Output projection
+        self.output_proj = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, action_dim),
+        )
         
         # Cache for trap templates to avoid regenerating static components
         self._trap_cache = None
@@ -123,18 +133,30 @@ class Agent_Tarpit(BaseExpert):
         
         # Trap 11-15: Gradient/Resource Traps (alternating pattern)
         for i in range(5):
-        # Multi-head cross-attention: observation attends over trap keys/values
-        self.cross_attn = nn.MultiheadAttention(
-            embed_dim=hidden_dim, num_heads=attn_heads, batch_first=True
-        )
-        self.attn_norm = nn.LayerNorm(hidden_dim)
-
-        # Output projection
-        self.output_proj = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.GELU(),
-            nn.Linear(hidden_dim, action_dim),
-        )
+            if i % 2 == 0:
+                traps.append(TrapArsenal.gradient_trap(batch_size, self.action_dim, device))
+            else:
+                traps.append(TrapArsenal.resource_nova(batch_size, self.action_dim, device))
+        
+        # Trap 16-20: Port Maze / Noise
+        for i in range(5):
+            traps.append(TrapArsenal.port_maze_noise(batch_size, self.action_dim, device))
+        
+        # Trap 21-25: Spectral and Temporal
+        for i in range(3):
+            traps.append(TrapArsenal.spectral_comb(batch_size, self.action_dim, device) * (0.5 + 0.5 * i))
+        for i in range(2):
+            traps.append(TrapArsenal.temporal_jitter(batch_size, self.action_dim, device) * (1 + i))
+        
+        # Stack: [Batch, Num_Traps, Action_Dim]
+        trap_stack = torch.stack(traps[:self.num_traps], dim=1)
+        
+        # Cache for reuse in eval mode only (keep on same device to avoid unnecessary copies)
+        if use_cache:
+            self._trap_cache = trap_stack.detach()
+            self._cache_batch_size = batch_size
+        
+        return trap_stack
 
     def _generate_arsenal(self, batch_size: int, device: torch.device) -> torch.Tensor:
         """Generate all trap vectors and stack as [B, num_traps, action_dim]."""
@@ -155,32 +177,6 @@ class Agent_Tarpit(BaseExpert):
             if i % 2 == 0:
                 traps.append(TrapArsenal.gradient_trap(batch_size, dim, device))
             else:
-                traps.append(TrapArsenal.resource_nova(batch_size, self.action_dim, device))
-        
-        # Trap 16-20: Port Maze / Noise
-        for i in range(5):
-            traps.append(TrapArsenal.port_maze_noise(batch_size, self.action_dim, device))
-        
-        # Stack: [Batch, Num_Traps, Action_Dim]
-        trap_stack = torch.stack(traps, dim=1)
-        
-        # Cache for reuse in eval mode only (keep on same device to avoid unnecessary copies)
-        if use_cache:
-            self._trap_cache = trap_stack.detach()
-            self._cache_batch_size = batch_size
-        
-        return trap_stack
-
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Input: Global Observation (Maximum View).
-        Output: Multi-vector hostile environment tensor.
-        """
-        batch_size = x.size(0)
-        device = x.device
-
-        # 1. Generate Raw Arsenal (20+ Traps) with caching
-        trap_stack = self._generate_trap_templates(batch_size, device)
                 traps.append(TrapArsenal.resource_nova(batch_size, dim, device))
 
         # Family 4: Port Maze (4 variants)
@@ -200,8 +196,6 @@ class Agent_Tarpit(BaseExpert):
         )
         return torch.stack(traps[:self.num_traps], dim=1)  # [B, T, D]
 
-        # Hardening: Boost weights to ensure "regret" (minimum activity threshold)
-        attn_weights = torch.clamp(attn_weights, min=0.1)
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
                       mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         batch_size = x.size(0)
