@@ -126,7 +126,16 @@ class LogEncoder(nn.Module):
             - edge_index: Graph connectivity [2, num_edges]
             - edge_attr: Edge features [num_edges, edge_feature_dim * 2]
         """
+        # Get device from module parameters for device-aware tensor creation
+        device = self.ip_projection.weight.device
+        
         if not logs:
+            # Return empty graph with correct feature dimensions on correct device
+            return Data(
+                x=torch.zeros((0, self.node_feature_dim), device=device),
+                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device)
+            )
             return self._empty_graph()
 
         src_indices = []
@@ -171,8 +180,25 @@ class LogEncoder(nn.Module):
             edge_attr_inputs.append((port, proto))
 
         # Create Node Features Tensor
-        # Iterate over all registered nodes in order of index 0..N-1
+        # Vectorized batch processing for better performance
         num_nodes = self.next_idx
+        
+        # Get device from module parameters
+        device = self.ip_projection.weight.device
+        
+        if num_nodes == 0:
+             return Data(
+                x=torch.zeros((0, self.node_feature_dim), device=device),
+                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device)
+            )
+        
+        # Vectorized IP to bits conversion using list comprehension and stack
+        # This is more efficient than loop-based tensor assignment
+        x_raw_list = [self._ip_to_bits(self.idx_to_ip[i]) for i in range(num_nodes)]
+        x_tensor = torch.stack(x_raw_list).to(device) # [num_nodes, 32]
+        
+        x_embedded = self.ip_projection(x_tensor) # [num_nodes, node_feature_dim]
         x_raw_list = []
         for i in range(num_nodes):
             ip_str = self.idx_to_ip[i]
@@ -185,8 +211,20 @@ class LogEncoder(nn.Module):
         x_embedded = self.ip_projection(x_tensor)  # [num_nodes, node_feature_dim]
 
         # Create Edge Index Tensor
-        edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long)
+        edge_index = torch.tensor([src_indices, dst_indices], dtype=torch.long, device=device)
 
+        # Create Edge Attributes Tensor - vectorized for better performance
+        if edge_attr_inputs:
+            ports_list, protos_list = zip(*edge_attr_inputs)
+            ports = torch.tensor(ports_list, dtype=torch.long, device=device)
+            protos = torch.tensor(protos_list, dtype=torch.long, device=device)
+
+            port_embeds = self.port_embedding(ports) # [num_edges, edge_feature_dim]
+            proto_embeds = self.proto_embedding(protos) # [num_edges, edge_feature_dim]
+
+            edge_attr = torch.cat([port_embeds, proto_embeds], dim=1) # [num_edges, edge_feature_dim * 2]
+        else:
+            edge_attr = torch.empty((0, self.edge_feature_dim * 2), device=device)
         # Create Edge Attributes Tensor on the same device as the embedding layers
         # to avoid device-mismatch errors when LogEncoder is moved to GPU.
         emb_device = self.port_embedding.weight.device

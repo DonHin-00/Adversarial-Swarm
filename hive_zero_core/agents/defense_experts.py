@@ -88,6 +88,41 @@ class Agent_Tarpit(BaseExpert):
         self.trap_proj = nn.Linear(action_dim, hidden_dim)
         self.obs_proj = nn.Linear(observation_dim, hidden_dim)
 
+        # Learnable 'Trap Selector' weights (soft attention)
+        self.attention = nn.Linear(observation_dim, self.num_traps)
+        
+        # Cache for trap templates to avoid regenerating static components
+        self._trap_cache = None
+        self._cache_batch_size = None
+
+    def _generate_trap_templates(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        """
+        Generate trap templates with caching for improved performance.
+        Only regenerates if batch size or device changes.
+        Note: Caching is only enabled during eval mode to maintain training variability.
+        """
+        # Only use cache in eval mode to preserve training randomness
+        use_cache = not self.training
+        
+        if (use_cache and self._trap_cache is not None and 
+            self._cache_batch_size == batch_size and 
+            self._trap_cache.device == device):
+            return self._trap_cache
+        
+        traps = []
+        
+        # Trap 1-5: Chaos Variants (reduced redundant calls)
+        chaos_base = TrapArsenal.chaotic_dynamics(batch_size, self.action_dim, device)
+        for i in range(5):
+            traps.append(chaos_base * (i + 1)) # Scale variance
+        
+        # Trap 6-10: Fractal Variants
+        fractal_base = TrapArsenal.recursive_fractal(batch_size, self.action_dim, device)
+        for i in range(5):
+            traps.append(fractal_base + torch.randn_like(fractal_base) * 0.1 * i)
+        
+        # Trap 11-15: Gradient/Resource Traps (alternating pattern)
+        for i in range(5):
         # Multi-head cross-attention: observation attends over trap keys/values
         self.cross_attn = nn.MultiheadAttention(
             embed_dim=hidden_dim, num_heads=attn_heads, batch_first=True
@@ -120,6 +155,32 @@ class Agent_Tarpit(BaseExpert):
             if i % 2 == 0:
                 traps.append(TrapArsenal.gradient_trap(batch_size, dim, device))
             else:
+                traps.append(TrapArsenal.resource_nova(batch_size, self.action_dim, device))
+        
+        # Trap 16-20: Port Maze / Noise
+        for i in range(5):
+            traps.append(TrapArsenal.port_maze_noise(batch_size, self.action_dim, device))
+        
+        # Stack: [Batch, Num_Traps, Action_Dim]
+        trap_stack = torch.stack(traps, dim=1)
+        
+        # Cache for reuse in eval mode only (keep on same device to avoid unnecessary copies)
+        if use_cache:
+            self._trap_cache = trap_stack.detach()
+            self._cache_batch_size = batch_size
+        
+        return trap_stack
+
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Input: Global Observation (Maximum View).
+        Output: Multi-vector hostile environment tensor.
+        """
+        batch_size = x.size(0)
+        device = x.device
+
+        # 1. Generate Raw Arsenal (20+ Traps) with caching
+        trap_stack = self._generate_trap_templates(batch_size, device)
                 traps.append(TrapArsenal.resource_nova(batch_size, dim, device))
 
         # Family 4: Port Maze (4 variants)
@@ -139,6 +200,8 @@ class Agent_Tarpit(BaseExpert):
         )
         return torch.stack(traps[:self.num_traps], dim=1)  # [B, T, D]
 
+        # Hardening: Boost weights to ensure "regret" (minimum activity threshold)
+        attn_weights = torch.clamp(attn_weights, min=0.1)
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
                       mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         batch_size = x.size(0)
