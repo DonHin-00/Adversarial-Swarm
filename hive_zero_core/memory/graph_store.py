@@ -193,6 +193,9 @@ class LogEncoder(nn.Module):
         """
         Extract inter-arrival times from tracked timestamps for temporal analysis.
 
+        Computes time differences between consecutive logs in the order they were
+        received, preserving the actual event sequence.
+
         Args:
             max_len: Maximum sequence length to return
 
@@ -206,9 +209,11 @@ class LogEncoder(nn.Module):
             # Not enough data, return zeros
             return torch.zeros(1, min(max_len, 10), device=device)
 
+        # Use most recent timestamps in the order they were added
+        recent_times = self.timestamps[-max_len:]
+
         # Compute inter-arrival times (differences between consecutive timestamps)
-        times = sorted(self.timestamps[-max_len:])  # Use most recent timestamps
-        inter_arrivals = [times[i+1] - times[i] for i in range(len(times) - 1)]
+        inter_arrivals = [recent_times[i+1] - recent_times[i] for i in range(len(recent_times) - 1)]
 
         # Convert to tensor
         if inter_arrivals:
