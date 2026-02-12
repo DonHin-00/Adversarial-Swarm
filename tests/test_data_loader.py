@@ -148,3 +148,101 @@ def test_dataset_batch_size_larger_than_data():
 
     batch = dataset.get_batch(0)
     assert len(batch) == 5
+
+
+def test_load_json_file(tmp_path):
+    """Test loading logs from JSON file."""
+    import json
+
+    # Create a test JSON file
+    json_file = tmp_path / "test_logs.json"
+    logs_data = [
+        {"src_ip": "192.168.1.1", "dst_ip": "10.0.0.5", "port": 80, "proto": 6},
+        {"src_ip": "192.168.1.2", "dst_ip": "10.0.0.6", "port": 443, "proto": 6},
+    ]
+    with open(json_file, 'w') as f:
+        json.dump(logs_data, f)
+
+    dataset = NetworkLogDataset(data_source=json_file, batch_size=10)
+
+    assert len(dataset) == 2
+    assert dataset.data[0]["src_ip"] == "192.168.1.1"
+
+
+def test_load_json_file_with_wrapper(tmp_path):
+    """Test loading logs from JSON file with 'logs' wrapper."""
+    import json
+
+    # Create a test JSON file with wrapper
+    json_file = tmp_path / "test_logs_wrapped.json"
+    logs_data = {
+        "logs": [
+            {"src_ip": "192.168.1.1", "dst_ip": "10.0.0.5", "port": 80, "proto": 6},
+            {"src_ip": "192.168.1.2", "dst_ip": "10.0.0.6", "port": 443, "proto": 6},
+        ]
+    }
+    with open(json_file, 'w') as f:
+        json.dump(logs_data, f)
+
+    dataset = NetworkLogDataset(data_source=json_file, batch_size=10)
+
+    assert len(dataset) == 2
+
+
+def test_load_jsonl_file(tmp_path):
+    """Test loading logs from JSONL file."""
+    import json
+
+    # Create a test JSONL file
+    jsonl_file = tmp_path / "test_logs.jsonl"
+    with open(jsonl_file, 'w') as f:
+        f.write(json.dumps({"src_ip": "192.168.1.1", "dst_ip": "10.0.0.5", "port": 80, "proto": 6}) + "\n")
+        f.write(json.dumps({"src_ip": "192.168.1.2", "dst_ip": "10.0.0.6", "port": 443, "proto": 6}) + "\n")
+
+    dataset = NetworkLogDataset(data_source=jsonl_file, batch_size=10)
+
+    assert len(dataset) == 2
+
+
+def test_load_csv_file(tmp_path):
+    """Test loading logs from CSV file."""
+    import csv
+
+    # Create a test CSV file
+    csv_file = tmp_path / "test_logs.csv"
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=["src_ip", "dst_ip", "port", "proto"])
+        writer.writeheader()
+        writer.writerow({"src_ip": "192.168.1.1", "dst_ip": "10.0.0.5", "port": "80", "proto": "6"})
+        writer.writerow({"src_ip": "192.168.1.2", "dst_ip": "10.0.0.6", "port": "443", "proto": "6"})
+
+    dataset = NetworkLogDataset(data_source=csv_file, batch_size=10)
+
+    assert len(dataset) == 2
+
+
+def test_load_nonexistent_file():
+    """Test loading from a file that doesn't exist falls back to synthetic."""
+    dataset = NetworkLogDataset(
+        data_source="/nonexistent/path/to/file.json",
+        batch_size=10,
+        num_synthetic_samples=50,
+    )
+
+    # Should fall back to synthetic data
+    assert len(dataset) == 50
+
+
+def test_load_unsupported_format(tmp_path):
+    """Test loading from unsupported format falls back to synthetic."""
+    txt_file = tmp_path / "test_logs.txt"
+    txt_file.write_text("some text data")
+
+    dataset = NetworkLogDataset(
+        data_source=txt_file,
+        batch_size=10,
+        num_synthetic_samples=50,
+    )
+
+    # Should fall back to synthetic data
+    assert len(dataset) == 50
