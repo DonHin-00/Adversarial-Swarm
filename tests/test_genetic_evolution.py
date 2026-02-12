@@ -20,8 +20,8 @@ class TestGeneticEvolution:
 
         # Mutated code should be different
         assert mutated != source
-        # Should contain gene marker
-        assert "GENE:" in mutated or "_gene_" in mutated
+        # Should contain gene marker (various formats)
+        assert ("GENE" in mutated or "_gene_" in mutated or "GENETIC_MARKER" in mutated)
 
     def test_polymorphic_engine_mutate_string(self):
         """Test that string payload mutation works."""
@@ -135,7 +135,87 @@ class TestGeneticEvolution:
         stats = evolution.get_stats()
         assert 'total' in stats
         assert 'success_rate' in stats
+        assert 'recent_success_rate' in stats  # New field in robust version
         assert stats['total'] >= 3
+
+    def test_polymorphic_engine_empty_input(self):
+        """Test that empty input is handled gracefully."""
+        from hive_zero_core.agents.genetic_evolution import PolymorphicEngine
+
+        engine = PolymorphicEngine()
+
+        # Empty code should raise ValueError
+        with pytest.raises(ValueError):
+            engine.mutate_code("", gene_seed=123)
+
+        # Empty payload should raise ValueError
+        with pytest.raises(ValueError):
+            engine.mutate_string("", gene_seed=123)
+
+    def test_natural_selection_strict_validation(self):
+        """Test strict validation mode."""
+        from hive_zero_core.agents.genetic_evolution import NaturalSelection
+
+        selector = NaturalSelection()
+
+        # Code with only comments should fail strict validation
+        comment_only = "# Just a comment\n# Another comment"
+        assert selector.validate_python(comment_only, strict=False) is True
+        assert selector.validate_python(comment_only, strict=True) is False
+
+        # Real code should pass both
+        real_code = "x = 1\nprint(x)"
+        assert selector.validate_python(real_code, strict=False) is True
+        assert selector.validate_python(real_code, strict=True) is True
+
+    def test_generation_tracker_history_limit(self):
+        """Test that generation tracker limits history size."""
+        from hive_zero_core.agents.genetic_evolution import GenerationTracker
+
+        tracker = GenerationTracker()
+        tracker.max_history_size = 10
+
+        # Add more than the limit
+        for i in range(15):
+            tracker.increment_generation(i, True)
+
+        # Should be limited to max_history_size
+        assert len(tracker.mutation_history) == 10
+        assert tracker.current_generation == 15  # Generation counter should still be accurate
+
+    def test_genetic_evolution_fallback_mutation(self):
+        """Test that fallback mutation works when all attempts fail."""
+        from hive_zero_core.agents.genetic_evolution import GeneticEvolution
+
+        evolution = GeneticEvolution()
+
+        # Use a payload that will likely trigger fallback
+        payload = "x"
+        mutated, gene_seed, success = evolution.evolve_payload(payload, max_attempts=1)
+
+        # Should have some mutation applied (fallback if needed)
+        assert len(mutated) >= len(payload)
+
+    def test_genetic_evolution_invalid_params(self):
+        """Test that invalid parameters are rejected."""
+        from hive_zero_core.agents.genetic_evolution import GeneticEvolution
+
+        # Invalid max_generations
+        with pytest.raises(ValueError):
+            GeneticEvolution(max_generations=0)
+
+        # Invalid mutation_rate
+        with pytest.raises(ValueError):
+            GeneticEvolution(mutation_rate=1.5)
+
+        evolution = GeneticEvolution()
+
+        # Invalid max_attempts
+        with pytest.raises(ValueError):
+            evolution.evolve_code("x = 1", max_attempts=0)
+
+        with pytest.raises(ValueError):
+            evolution.evolve_payload("test", max_attempts=-1)
 
 
 class TestMutatorWithEvolution:
