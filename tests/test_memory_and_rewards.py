@@ -79,6 +79,81 @@ class TestLogEncoder:
         # Should be on same device as ip_projection weight (CPU by default)
         assert data.x.device == encoder.ip_projection.weight.device
 
+    def test_timestamp_tracking(self):
+        """Test that timestamps are tracked correctly."""
+        from hive_zero_core.memory.graph_store import LogEncoder
+
+        encoder = LogEncoder(node_feature_dim=64)
+        logs = [
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6,
+             "timestamp": "2024-01-01T10:00:00"},
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6,
+             "timestamp": "2024-01-01T10:00:01"},
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6,
+             "timestamp": "2024-01-01T10:00:03"},
+        ]
+        encoder.update(logs)
+
+        # Should have 3 timestamps tracked
+        assert len(encoder.timestamps) == 3
+        assert encoder.last_timestamp is not None
+
+    def test_inter_arrival_times_extraction(self):
+        """Test extraction of inter-arrival times for Chronos agent."""
+        from hive_zero_core.memory.graph_store import LogEncoder
+
+        encoder = LogEncoder(node_feature_dim=64)
+        logs = [
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6,
+             "timestamp": "2024-01-01T10:00:00"},
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6,
+             "timestamp": "2024-01-01T10:00:01"},
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6,
+             "timestamp": "2024-01-01T10:00:03"},
+        ]
+        encoder.update(logs)
+
+        inter_arrivals = encoder.get_inter_arrival_times(max_len=100)
+
+        # Should have shape [1, 2] (3 timestamps = 2 intervals)
+        assert inter_arrivals.shape[0] == 1
+        assert inter_arrivals.shape[1] == 2
+
+        # Check values are positive (time differences)
+        assert (inter_arrivals >= 0).all()
+
+    def test_inter_arrival_times_insufficient_data(self):
+        """Test inter-arrival times with insufficient timestamps."""
+        from hive_zero_core.memory.graph_store import LogEncoder
+
+        encoder = LogEncoder(node_feature_dim=64)
+        logs = [
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6},
+        ]
+        encoder.update(logs)
+
+        inter_arrivals = encoder.get_inter_arrival_times(max_len=100)
+
+        # Should return zeros when insufficient data
+        assert inter_arrivals.shape[0] == 1
+        assert inter_arrivals.shape[1] > 0
+
+    def test_reset_clears_timestamps(self):
+        """Test that reset() clears timestamp tracking."""
+        from hive_zero_core.memory.graph_store import LogEncoder
+
+        encoder = LogEncoder(node_feature_dim=64)
+        logs = [
+            {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "port": 80, "proto": 6,
+             "timestamp": "2024-01-01T10:00:00"},
+        ]
+        encoder.update(logs)
+        assert len(encoder.timestamps) > 0
+
+        encoder.reset()
+        assert len(encoder.timestamps) == 0
+        assert encoder.last_timestamp is None
+
 
 class TestSyntheticExperienceGenerator:
     """Tests for foundation.SyntheticExperienceGenerator."""

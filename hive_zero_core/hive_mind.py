@@ -189,6 +189,25 @@ class HiveMind(nn.Module):
             self.expert_booster,       # 18  Red Booster
         ])
 
+        # Validate expert ordering at initialization to fail fast if order changes
+        expected_names = [
+            "Cartographer", "DeepScope", "Chronos", "PayloadGen", "Mutator",
+            "Sentinel", "Mimic", "Ghost", "Stego", "Cleaner",
+            "Tarpit", "FeedbackLoop", "Flashbang", "GlassHouse"
+        ]
+        if len(self.experts) != len(expected_names):
+            raise ValueError(
+                f"Expected {len(expected_names)} experts but found {len(self.experts)} in self.experts. "
+                "Expert ordering and membership must be kept in sync with expected_names for correct gating."
+            )
+        for idx, (expert, expected_name) in enumerate(zip(self.experts, expected_names)):
+            if expert.name != expected_name:
+                raise ValueError(
+                    f"Expert at index {idx} has name '{expert.name}' but expected '{expected_name}'. "
+                    f"Expert ordering in self.experts must match the index-based dispatch in forward()."
+                )
+
+        # 3. Gating Mechanism
         # 4. Gating Mechanism
         self.gating_network = GatingNetwork(observation_dim, num_experts=len(self.experts))
 
@@ -229,6 +248,13 @@ class HiveMind(nn.Module):
         if not isinstance(raw_logs, list):
             raise TypeError(f"raw_logs must be a list, got {type(raw_logs)}")
 
+        if data.x.size(0) > 0:
+            global_state = torch.mean(data.x, dim=0, keepdim=True)
+        else:
+            # Create fallback global_state on the correct device and dtype
+            device = next(self.parameters()).device
+            dtype = next(self.parameters()).dtype
+            global_state = torch.zeros(1, self.observation_dim, device=device, dtype=dtype)
         data = self.log_encoder.update(raw_logs)
         global_state = self.compute_global_state(data)
 
@@ -257,67 +283,75 @@ class HiveMind(nn.Module):
         for expert in self.experts:
             expert.is_active = False
 
-        # Execute Active Experts
+        # Execute Active Experts using index-based dispatch for better performance
         for idx in active_indices:
             expert = self.experts[idx]
             expert.is_active = True
 
             try:
-                if expert.name == "Cartographer":
+                # Index-based expert execution (more efficient than string comparison)
+                if idx == 0:  # Cartographer
                     out = expert(data.x, context=data.edge_index)
                     results["topology"] = out
 
-                elif expert.name == "DeepScope":
+                elif idx == 1:  # DeepScope
                     out = expert(global_state, mask=None)
                     results["constraints"] = out
 
-                elif expert.name == "Chronos":
-                    dummy_times = torch.randn(1, 10, device=global_state.device)
+                elif idx == 2:  # Chronos
+                    dummy_times = torch.randn(1, 10, device=global_state.device, dtype=global_state.dtype)
                     out = expert(dummy_times)
+                elif expert.name == "Chronos":
+                    # Extract inter-arrival times from log encoder
+                    inter_arrival_times = self.log_encoder.get_inter_arrival_times(max_len=100)
+                    out = expert(inter_arrival_times)
                     results["timing"] = out
 
-                elif expert.name == "PayloadGen":
+                elif idx == 3:  # PayloadGen
                     out = expert(global_state)
                     results["raw_payload"] = out
 
-                elif expert.name == "Mutator":
+                elif idx == 4:  # Mutator
                     out = expert(global_state)
                     results["optimized_payload"] = out
 
-                elif expert.name == "Sentinel":
+                elif idx == 5:  # Sentinel
                     out = expert(global_state.unsqueeze(1))
                     results["defense_score"] = out
 
-                elif expert.name == "Mimic":
+                elif idx == 6:  # Mimic
                     out = expert(global_state)
                     results["traffic_shape"] = out
 
-                elif expert.name == "Ghost":
+                elif idx == 7:  # Ghost
                     out = expert(global_state)
                     results["hiding_spot"] = out
 
-                elif expert.name == "Stego":
-                    dummy_data = torch.rand(1, self.observation_dim, device=global_state.device)
+                elif idx == 8:  # Stego
+                    dummy_data = torch.rand(1, self.observation_dim, device=global_state.device, dtype=global_state.dtype)
                     out = expert(dummy_data)
+                elif expert.name == "Stego":
+                    # Use global state for steganographic embedding
+                    out = expert(global_state)
                     results["covert_channel"] = out
 
-                elif expert.name == "Cleaner":
+                elif idx == 9:  # Cleaner
                     out = expert(global_state)
                     results["cleanup"] = out
 
-                elif expert.name == "Tarpit":
+                elif idx == 10:  # Tarpit
                     out = expert(global_state)
                     results["active_defense"] = out
 
-                elif expert.name == "FeedbackLoop":
+                elif idx == 11:  # FeedbackLoop
                     out = expert(global_state)
                     results["counter_strike"] = out
 
-                elif expert.name == "Flashbang":
+                elif idx == 12:  # Flashbang
                     out = expert(global_state)
                     results["overload"] = out
 
-                elif expert.name == "GlassHouse":
+                elif idx == 13:  # GlassHouse
                     out = expert(global_state)
                     results["total_exposure"] = out
 
@@ -352,7 +386,7 @@ class HiveMind(nn.Module):
                     results["hardened_payload"] = out
 
             except Exception as e:
-                self.logger.error(f"Execution failed for {expert.name}: {e}")
+                self.logger.error(f"Execution failed for expert {idx}: {e}")
 
         return results
 

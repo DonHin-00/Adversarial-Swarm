@@ -24,6 +24,33 @@ class SyntheticExperienceGenerator:
         device: Optional[torch.device] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
+        Returns a batch of (obs, action, reward, next_obs, done)
+        simulating perfect behavior. Optimized for better performance.
+        """
+        # Calculate batch sizes efficiently
+        idle_size = batch_size // 3
+        scan_size = batch_size // 3
+        attack_size = batch_size - idle_size - scan_size
+        
+        # 1. Observations: Simulate diversified network traffic
+        # Vectorized generation for better performance
+        
+        # Cluster 1: Idle / Noise (Low Magnitude)
+        idle_obs = torch.randn(idle_size, self.obs_dim) * 0.1
+
+        # Cluster 2: Recon Scan (Structured Spikes)
+        scan_obs = torch.randn(scan_size, self.obs_dim) * 0.5
+        scan_obs[:, :10] += 2.0 # High signals in first 10 dims (Simulating Ports)
+
+        # Cluster 3: Active Attack (High Magnitude, Complex)
+        attack_obs = torch.abs(torch.randn(attack_size, self.obs_dim)) * 2.0 # Strong signals
+
+        obs = torch.cat([idle_obs, scan_obs, attack_obs], dim=0)
+        # Shuffle
+        idx = torch.randperm(batch_size)
+        obs = obs[idx]
+
+        # 2. Optimal Actions (Instincts) - vectorized computation
         Returns (obs, action, reward, next_obs, done) simulating optimal behaviour.
 
         Args:
@@ -54,6 +81,16 @@ class SyntheticExperienceGenerator:
         high_mask = (obs_mag > 0.5).float()
         actions += high_mask * torch.randn(batch_size, self.act_dim, device=device) * 5.0
 
+        # Low Intensity -> Generate "Map" patterns (Structured) - optimized
+        low_mask = (1.0 - high_mask)
+        pattern = torch.sin(torch.linspace(0, 10, self.act_dim))
+        actions += low_mask * pattern.unsqueeze(0)
+
+        # 3. Rewards: High rewards for this synthetic data (it represents "Winning")
+        rewards = torch.full((batch_size, 1), 10.0) # More efficient than ones * 10.0
+
+        # 4. Next Obs (State Transitions)
+        # Assume successful mitigation reduces threat (next state is calmer)
         low_mask = 1.0 - high_mask
         pattern = torch.sin(torch.linspace(0, 10, self.act_dim, device=device))
         actions += low_mask * pattern.unsqueeze(0).expand(batch_size, -1)
