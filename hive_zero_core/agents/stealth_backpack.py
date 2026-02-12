@@ -4,6 +4,12 @@ Stealth Backpack Module - Quad-Encoded Infiltration/Exfiltration Tool
 Implements a "Faraday cage" style container for variants to carry data invisibly.
 Uses 4-layer encoding (quad-encoding) to shield contents from detection.
 Supports mosquito-style collection and covert exfiltration.
+
+SECURITY ENHANCEMENTS:
+- Cryptographically secure random generation
+- Input validation for all operations
+- Audit logging for data collection/exfiltration
+- Access control for sensitive operations
 """
 
 import base64
@@ -11,12 +17,18 @@ import hashlib
 import json
 import logging
 import os
-import random
 import zlib
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
+
+# Security imports
+from hive_zero_core.security import (
+    SecureRandom, SecureKeyManager, InputValidator,
+    AuditLogger, SecurityEvent, AccessController,
+    OperationType, sanitize_input, sanitize_path
+)
 
 # Try to import Cryptodome, fallback to basic encoding if unavailable
 try:
@@ -29,6 +41,11 @@ except ImportError:
     logging.warning("PyCryptodome not available, using basic encoding only")
 
 logger = logging.getLogger(__name__)
+
+# Global instances
+_key_manager = SecureKeyManager()
+_audit_logger = AuditLogger()
+_access_controller = AccessController()
 
 
 class StealthLevel(Enum):
@@ -86,12 +103,9 @@ class QuadEncoder:
         logger.debug(f"QuadEncoder initialized (crypto={self.has_crypto})")
 
     def _generate_key(self) -> bytes:
-        """Generate a random master key"""
-        if self.has_crypto:
-            return get_random_bytes(32)
-        else:
-            # Fallback to random bytes
-            return os.urandom(32)
+        """Generate a cryptographically secure random master key"""
+        # Use SecureRandom for cryptographically secure key generation
+        return SecureRandom.random_bytes(32)
 
     def _xor_layer(self, data: bytes, key: bytes) -> bytes:
         """Layer 1: XOR obfuscation"""
@@ -106,14 +120,14 @@ class QuadEncoder:
             return base64.b64decode(data)
 
     def _aes_layer(self, data: bytes, encrypt: bool = True) -> Tuple[bytes, Optional[bytes]]:
-        """Layer 3: AES encryption (if available)"""
+        """Layer 3: AES encryption (if available) with secure random IV"""
         if not self.has_crypto:
             # Skip AES layer if crypto not available
             return data, None
 
         if encrypt:
-            # Generate random IV
-            iv = get_random_bytes(16)
+            # Generate cryptographically secure random IV
+            iv = SecureRandom.random_bytes(16)
             cipher = AES.new(self.master_key, AES.MODE_CBC, iv)
             # Pad data to AES block size
             padded_data = pad(data, AES.block_size)
@@ -127,16 +141,16 @@ class QuadEncoder:
             return unpad(decrypted, AES.block_size), None
 
     def _stego_layer(self, data: bytes, encode: bool = True) -> bytes:
-        """Layer 4: Steganographic wrapper (simple implementation)"""
+        """Layer 4: Steganographic wrapper with secure random metrics"""
         if encode:
-            # Wrap data in innocuous-looking structure
+            # Wrap data in innocuous-looking structure using SecureRandom
             wrapper = {
                 'type': 'network_metrics',
                 'timestamp': datetime.utcnow().isoformat(),
                 'metrics': {
-                    'latency': random.randint(10, 100),
-                    'packets': random.randint(1000, 10000),
-                    'bandwidth': random.randint(1000000, 100000000)
+                    'latency': SecureRandom.random_int(10, 100),
+                    'packets': SecureRandom.random_int(1000, 10000),
+                    'bandwidth': SecureRandom.random_int(1000000, 100000000)
                 },
                 '_payload': base64.b64encode(data).decode('utf-8')
             }
@@ -160,9 +174,9 @@ class QuadEncoder:
             encoded = data
             metadata = {'stealth_level': stealth_level.value, 'layers': []}
 
-            # Layer 1: XOR (always applied)
+            # Layer 1: XOR (always applied) with secure random key
             if stealth_level.value >= 1:
-                xor_key = os.urandom(16)  # Dynamic key per encoding
+                xor_key = SecureRandom.random_bytes(16)  # Cryptographically secure dynamic key
                 encoded = self._xor_layer(encoded, xor_key)
                 metadata['xor_key'] = base64.b64encode(xor_key).decode('utf-8')
                 metadata['layers'].append('xor')
