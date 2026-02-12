@@ -245,13 +245,22 @@ class InfiltrationEngine:
         """
         Quick hit-and-run collection.
         High speed, lower thoroughness.
+        
+        Args:
+            target: Target identifier (e.g., hostname, IP, process name)
+            data_types: List of data types to collect
+            
+        Returns:
+            List of collected data items
         """
         collected = []
         for data_type in data_types:
-            # Simulate quick collection
+            # Generate collection command based on data type
+            collection_payload = self._generate_collection_payload(data_type, target)
+            
             item = CollectedData(
                 data_type=data_type,
-                content=f"[MOSQUITO] {data_type} from {target}".encode('utf-8'),
+                content=collection_payload,
                 timestamp=datetime.utcnow(),
                 source=target,
                 stealth_score=0.95  # High stealth for quick operations
@@ -261,22 +270,105 @@ class InfiltrationEngine:
 
         logger.info(f"Mosquito collected {len(collected)} items from {target}")
         return collected
+    
+    def _generate_collection_payload(self, data_type: str, target: str) -> bytes:
+        """Generate actual collection payload based on data type."""
+        payloads = {
+            'credentials': self._collect_credentials_payload(target),
+            'files': self._collect_files_payload(target),
+            'network_config': self._collect_network_payload(target),
+            'processes': self._collect_process_payload(target),
+            'registry': self._collect_registry_payload(target),
+            'memory': self._collect_memory_payload(target),
+            'environment': self._collect_environment_payload(target),
+        }
+        return payloads.get(data_type, f"collect_{data_type}:{target}".encode('utf-8'))
+    
+    def _collect_credentials_payload(self, target: str) -> bytes:
+        """Generate credential collection payload."""
+        # Real credential collection techniques
+        techniques = [
+            f"lsass_dump:{target}",
+            f"sam_extract:{target}",
+            f"cached_creds:{target}",
+            f"browser_creds:{target}",
+            f"wifi_passwords:{target}"
+        ]
+        return '\n'.join(techniques).encode('utf-8')
+    
+    def _collect_files_payload(self, target: str) -> bytes:
+        """Generate file collection payload."""
+        # Target specific file patterns
+        patterns = [
+            "*.key", "*.pem", "*.p12", "*.pfx",  # Certificates
+            "*.config", "*.ini", "*.yaml", "*.json",  # Configs
+            "*password*", "*secret*", "*token*",  # Sensitive
+            "*.doc*", "*.xls*", "*.pdf"  # Documents
+        ]
+        return f"file_search:{target}:{','.join(patterns)}".encode('utf-8')
+    
+    def _collect_network_payload(self, target: str) -> bytes:
+        """Generate network config collection payload."""
+        commands = [
+            f"ipconfig:{target}",
+            f"netstat:{target}",
+            f"routing_table:{target}",
+            f"arp_cache:{target}",
+            f"dns_config:{target}",
+            f"firewall_rules:{target}"
+        ]
+        return '\n'.join(commands).encode('utf-8')
+    
+    def _collect_process_payload(self, target: str) -> bytes:
+        """Generate process collection payload."""
+        return f"process_list:{target}:full_cmdline:true".encode('utf-8')
+    
+    def _collect_registry_payload(self, target: str) -> bytes:
+        """Generate Windows registry collection payload."""
+        keys = [
+            "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "HKLM\\SYSTEM\\CurrentControlSet\\Services"
+        ]
+        return f"registry_dump:{target}:{';'.join(keys)}".encode('utf-8')
+    
+    def _collect_memory_payload(self, target: str) -> bytes:
+        """Generate memory collection payload."""
+        return f"memory_dump:{target}:process_filter:sensitive".encode('utf-8')
+    
+    def _collect_environment_payload(self, target: str) -> bytes:
+        """Generate environment collection payload."""
+        return f"env_vars:{target}:include_paths:true".encode('utf-8')
 
     def vacuum_collect(self, target: str) -> List[CollectedData]:
         """
         Comprehensive sweep collection.
         Lower speed, higher thoroughness.
+        
+        Args:
+            target: Target identifier for comprehensive collection
+            
+        Returns:
+            List of all collected data items
         """
-        data_types = ['credentials', 'files', 'network_config', 'processes', 'registry']
+        # Comprehensive data type list for thorough collection
+        data_types = [
+            'credentials', 'files', 'network_config', 'processes', 
+            'registry', 'memory', 'environment', 'services',
+            'scheduled_tasks', 'installed_software', 'connections',
+            'shares', 'clipboard', 'recent_files', 'browser_history'
+        ]
         collected = []
 
         for data_type in data_types:
+            collection_payload = self._generate_collection_payload(data_type, target)
             item = CollectedData(
                 data_type=data_type,
-                content=f"[VACUUM] {data_type} from {target}".encode('utf-8'),
+                content=collection_payload,
                 timestamp=datetime.utcnow(),
                 source=target,
-                stealth_score=0.75  # Medium stealth for comprehensive ops
+                stealth_score=0.75,  # Medium stealth for comprehensive ops
+                metadata={'sweep_mode': 'comprehensive'}
             )
             collected.append(item)
             self.collected_items.append(item)
@@ -287,13 +379,38 @@ class InfiltrationEngine:
     def surgical_collect(self, target: str, specific_target: str) -> Optional[CollectedData]:
         """
         Targeted collection of specific data.
+        
+        Args:
+            target: System/host target
+            specific_target: Specific item to collect (file path, registry key, etc.)
+            
+        Returns:
+            Collected data item with precise targeting
         """
+        # Generate targeted collection based on specific_target type
+        if '\\' in specific_target or '/' in specific_target:
+            # File path
+            collection_cmd = f"file_extract:{target}:{specific_target}"
+        elif specific_target.startswith('HKLM\\') or specific_target.startswith('HKCU\\'):
+            # Registry key
+            collection_cmd = f"registry_read:{target}:{specific_target}"
+        elif ':' in specific_target:
+            # Service or process
+            collection_cmd = f"service_query:{target}:{specific_target}"
+        else:
+            # Generic target
+            collection_cmd = f"targeted_collect:{target}:{specific_target}"
+        
         item = CollectedData(
             data_type='targeted',
-            content=f"[SURGICAL] {specific_target} from {target}".encode('utf-8'),
+            content=collection_cmd.encode('utf-8'),
             timestamp=datetime.utcnow(),
             source=target,
-            metadata={'target': specific_target},
+            metadata={
+                'target': specific_target,
+                'precision': 'surgical',
+                'collection_method': 'targeted'
+            },
             stealth_score=0.90  # High precision, high stealth
         )
         self.collected_items.append(item)
