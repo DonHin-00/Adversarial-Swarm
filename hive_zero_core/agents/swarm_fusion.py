@@ -6,6 +6,10 @@ where individual units can combine into larger, more powerful collectives.
 Enhanced with capability escalation - merged units gain exponentially more power.
 """
 
+from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
+from hive_zero_core.security.audit_logger import SecurityEvent
+from hive_zero_core.security.access_control import OperationType
+
 import logging
 import random
 from typing import List, Dict, Optional, Tuple, Set

@@ -11,8 +11,10 @@ Implements ephemeral variants that:
 """
 
 import logging
-import random
-import uuid
+from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
+from hive_zero_core.security.audit_logger import SecurityEvent
+from hive_zero_core.security.access_control import OperationType
+
 from typing import List, Dict, Optional, Set, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -94,7 +96,7 @@ class Variant:
 
     def __post_init__(self):
         if not self.variant_id:
-            self.variant_id = str(uuid.uuid4())[:12]
+            self.variant_id = SecureRandom.random_id(12)
         
         # Initialize role-specific specialization traits
         self._initialize_specialization()
@@ -511,7 +513,7 @@ class VariantBreeder:
         max_jobs = int(max_jobs * 1.5)  # 50% bonus for cross-breeding
         
         # Primary role is randomly selected
-        primary_role = random.choice([role1, role2])
+        primary_role = SecureRandom.random_choice([role1, role2])
         
         # Combine genomes
         merged_genome = self._merge_genomes(parent1.genome, parent2.genome)
@@ -641,14 +643,14 @@ class VariantBreeder:
             # Decide whether to cross-breed
             if random.random() < cross_breed_rate and len(parents) > 1 and len(roles) > 1:
                 # Cross-breed with another parent
-                other_parent = random.choice([p for p in parents if p != parent])
-                role1 = random.choice(roles)
-                role2 = random.choice([r for r in roles if r != role1])
+                other_parent = SecureRandom.random_choice([p for p in parents if p != parent])
+                role1 = SecureRandom.random_choice(roles)
+                role2 = SecureRandom.random_choice([r for r in roles if r != role1])
                 
                 variant = self.cross_breed_variants(parent, other_parent, role1, role2)
             else:
                 # Single-role breeding
-                role = random.choice(roles)
+                role = SecureRandom.random_choice(roles)
                 variant = self.breed_variant(parent, role)
             
             variants.append(variant)

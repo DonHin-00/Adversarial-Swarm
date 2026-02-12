@@ -8,6 +8,10 @@ Inspired by self-modifying malware techniques adapted for legitimate red team op
 import ast
 import logging
 import random
+from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
+from hive_zero_core.security.audit_logger import SecurityEvent
+from hive_zero_core.security.access_control import OperationType
+
 from typing import Optional, Tuple
 
 

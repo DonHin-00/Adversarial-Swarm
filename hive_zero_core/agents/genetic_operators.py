@@ -6,6 +6,10 @@ elitism, fitness-based selection, and adaptive mutation strategies.
 """
 
 import logging
+from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
+from hive_zero_core.security.audit_logger import SecurityEvent
+from hive_zero_core.security.access_control import OperationType
+
 import random
 from typing import List, Tuple, Optional, Callable
 import numpy as np

@@ -6,6 +6,10 @@ capabilities. The more merges, the more capabilities unlock.
 """
 
 import logging
+from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
+from hive_zero_core.security.audit_logger import SecurityEvent
+from hive_zero_core.security.access_control import OperationType
+
 import numpy as np
 from typing import List, Dict, Set, Optional
 from enum import Enum

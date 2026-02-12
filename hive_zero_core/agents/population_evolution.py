@@ -6,6 +6,10 @@ and multi-generational evolution for payload and code optimization.
 """
 
 import logging
+from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
+from hive_zero_core.security.audit_logger import SecurityEvent
+from hive_zero_core.security.access_control import OperationType
+
 import random
 from typing import List, Optional, Callable, Dict
 import numpy as np
