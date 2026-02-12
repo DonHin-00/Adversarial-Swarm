@@ -21,6 +21,9 @@ import hashlib
 from hive_zero_core.agents.genetic_operators import Individual
 from hive_zero_core.agents.swarm_fusion import SwarmUnit, MergeStrategy
 from hive_zero_core.agents.capability_escalation import CapabilityTier
+from hive_zero_core.agents.stealth_backpack import (
+    StealthBackpack, StealthLevel, CollectionMode
+)
 
 
 logger = logging.getLogger(__name__)
@@ -70,6 +73,7 @@ class Variant:
     
     Lives only to complete assigned jobs, then dies and reports intelligence.
     Stronger parents (higher tier) produce stronger variants with more jobs.
+    Equipped with StealthBackpack for infiltration/exfiltration operations.
     """
     variant_id: str
     role: VariantRole
@@ -86,6 +90,7 @@ class Variant:
     specialization_traits: Dict[str, float] = field(default_factory=dict)
     cross_bred: bool = False  # True if bred from different role parents
     parent_roles: List[VariantRole] = field(default_factory=list)
+    backpack: Optional[StealthBackpack] = None  # Stealth backpack for infil/exfil
 
     def __post_init__(self):
         if not self.variant_id:
@@ -93,6 +98,9 @@ class Variant:
         
         # Initialize role-specific specialization traits
         self._initialize_specialization()
+        
+        # Initialize stealth backpack based on role and tier
+        self._initialize_backpack()
 
     def _initialize_specialization(self):
         """Initialize completely different traits based on role."""
@@ -156,6 +164,41 @@ class Variant:
             for k, v in self.specialization_traits.items()
         }
 
+    def _initialize_backpack(self):
+        """Initialize stealth backpack based on role and tier."""
+        # Determine stealth level based on tier
+        stealth_mapping = {
+            CapabilityTier.BASIC: StealthLevel.LOW,
+            CapabilityTier.ENHANCED: StealthLevel.MEDIUM,
+            CapabilityTier.ADVANCED: StealthLevel.HIGH,
+            CapabilityTier.ELITE: StealthLevel.MAXIMUM,
+            CapabilityTier.EXPERT: StealthLevel.MAXIMUM,
+            CapabilityTier.MASTER: StealthLevel.MAXIMUM
+        }
+        
+        # Determine collection mode based on role
+        mode_mapping = {
+            VariantRole.RECONNAISSANCE: CollectionMode.VACUUM,
+            VariantRole.HONEYPOT: CollectionMode.PASSIVE,
+            VariantRole.WAF_BYPASS: CollectionMode.MOSQUITO,
+            VariantRole.PAYLOAD_GEN: CollectionMode.SURGICAL,
+            VariantRole.STEALTH: CollectionMode.MOSQUITO,
+            VariantRole.EXFILTRATION: CollectionMode.SURGICAL,
+            VariantRole.PERSISTENCE: CollectionMode.PASSIVE,
+            VariantRole.LATERAL_MOVEMENT: CollectionMode.VACUUM
+        }
+        
+        stealth_level = stealth_mapping.get(self.tier, StealthLevel.MEDIUM)
+        collection_mode = mode_mapping.get(self.role, CollectionMode.MOSQUITO)
+        
+        self.backpack = StealthBackpack(
+            stealth_level=stealth_level,
+            collection_mode=collection_mode
+        )
+        
+        logger.debug(f"Variant {self.variant_id} backpack initialized: "
+                    f"stealth={stealth_level.name}, mode={collection_mode.value}")
+
     def assign_job(self, job: VariantJob):
         """Assign a job to this variant."""
         if len(self.jobs) >= self.max_jobs:
@@ -209,14 +252,22 @@ class Variant:
                   for job in self.jobs)
 
     def die(self):
-        """Variant dies after completing all jobs."""
+        """Variant dies after completing all jobs. Harvests backpack intelligence."""
         self.is_alive = False
+        
+        # Harvest backpack intelligence before dying
+        if self.backpack:
+            backpack_intel = self.backpack.harvest_intelligence()
+            self.intelligence_buffer['backpack_harvest'] = backpack_intel
+            logger.debug(f"Variant {self.variant_id} harvested backpack intelligence: "
+                        f"{backpack_intel['metrics']['total_collected']} items")
+        
         logger.info(f"🪦 Variant {self.variant_id} (role={self.role.value}, tier={self.tier.name}) "
                    f"died after completing {self.completed_jobs}/{len(self.jobs)} jobs")
 
     def get_intelligence_report(self) -> Dict[str, Any]:
         """Generate final intelligence report to send to central hub."""
-        return {
+        report = {
             'variant_id': self.variant_id,
             'role': self.role.value,
             'tier': self.tier.name,
@@ -231,6 +282,12 @@ class Variant:
             'parent_roles': [r.value for r in self.parent_roles],
             'fitness': self.fitness
         }
+        
+        # Include backpack metrics if available
+        if self.backpack:
+            report['backpack_metrics'] = self.backpack.get_metrics().__dict__
+        
+        return report
 
     def __repr__(self):
         status = "💀" if not self.is_alive else "🔴" if self.jobs else "🟢"
