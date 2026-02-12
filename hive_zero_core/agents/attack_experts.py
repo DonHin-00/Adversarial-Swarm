@@ -7,6 +7,8 @@ from transformers import AutoModelForSeq2SeqLM, AutoModelForSequenceClassificati
 
 from hive_zero_core.agents.base_expert import BaseExpert
 from hive_zero_core.agents.genetic_evolution import GeneticEvolution
+from hive_zero_core.agents.population_evolution import PopulationManager
+from hive_zero_core.agents.swarm_fusion import SwarmFusion, CollectiveIntelligence, MergeStrategy
 
 
 def _quantize_to_ids(x: torch.Tensor, vocab_size: int, scale: int = 1000) -> torch.Tensor:
@@ -117,7 +119,8 @@ class Agent_Mutator(BaseExpert):
     def __init__(self, observation_dim: int, action_dim: int,
                  sentinel_expert: BaseExpert, generator_expert: BaseExpert,
                  hidden_dim: int = 64, k_steps: int = 5, lr: float = 0.05,
-                 enable_evolution: bool = True):
+                 enable_evolution: bool = True, enable_population_evolution: bool = False,
+                 enable_swarm_fusion: bool = False):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
 
         self.sentinel = sentinel_expert
@@ -125,12 +128,37 @@ class Agent_Mutator(BaseExpert):
         self.k_steps = k_steps
         self.lr = lr
 
-        # Genetic Evolution Engine
+        # Genetic Evolution Engine (single-individual)
         self.enable_evolution = enable_evolution
         if enable_evolution:
             self.evolution_engine = GeneticEvolution(max_generations=100)
         else:
             self.evolution_engine = None
+
+        # Population-Based Evolution (advanced)
+        self.enable_population_evolution = enable_population_evolution
+        if enable_population_evolution:
+            self.population_manager = PopulationManager(
+                population_size=20,
+                elite_size=2,
+                mutation_rate=0.3,
+                crossover_rate=0.7,
+                max_generations=30
+            )
+        else:
+            self.population_manager = None
+
+        # Swarm Fusion (merge capability)
+        self.enable_swarm_fusion = enable_swarm_fusion
+        if enable_swarm_fusion:
+            self.swarm_fusion = SwarmFusion(
+                min_fitness_threshold=0.5,
+                max_unit_size=8
+            )
+            self.collective_intelligence = CollectiveIntelligence()
+        else:
+            self.swarm_fusion = None
+            self.collective_intelligence = None
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
                       mask: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -251,4 +279,228 @@ class Agent_Mutator(BaseExpert):
 
         stats = self.evolution_engine.get_stats()
         stats['enabled'] = True
+        return stats
+
+    def evolve_code_population(self, source_code: str, generations: int = 30) -> tuple:
+        """
+        Evolve Python source code using population-based genetic algorithm.
+
+        Args:
+            source_code: Original Python source code
+            generations: Number of generations to evolve
+
+        Returns:
+            Tuple of (best_code, fitness, stats)
+        """
+        if not self.enable_population_evolution or self.population_manager is None:
+            self.logger.warning("Population evolution not enabled")
+            return source_code, 0.0, {'enabled': False}
+
+        from hive_zero_core.agents.genetic_evolution import NaturalSelection
+
+        validator = lambda code: NaturalSelection.validate_python(code, strict=False)
+
+        try:
+            # Run evolution
+            best_individual = self.population_manager.evolve(
+                source_code, validator, generations=generations
+            )
+
+            # Get statistics
+            stats = self.population_manager.get_statistics()
+            stats['enabled'] = True
+
+            self.logger.info(f"Population evolution complete. Best fitness: {best_individual.fitness:.3f}")
+
+            return best_individual.genome, best_individual.fitness, stats
+
+        except Exception as e:
+            self.logger.error(f"Population evolution failed: {e}")
+            return source_code, 0.0, {'enabled': True, 'error': str(e)}
+
+    def get_population_best(self, n: int = 5) -> list:
+        """
+        Get top-n best individuals from population.
+
+        Args:
+            n: Number of individuals to return
+
+        Returns:
+            List of top-n individuals (or empty if not available)
+        """
+        if not self.enable_population_evolution or self.population_manager is None:
+            return []
+
+        try:
+            return self.population_manager.get_best_individuals(n)
+        except Exception as e:
+            self.logger.warning(f"Failed to get best individuals: {e}")
+            return []
+
+    def merge_evolved_payloads(self, payload1: str, payload2: str,
+                              strategy: str = "best_segments") -> tuple:
+        """
+        Merge two evolved payloads using swarm fusion.
+
+        Args:
+            payload1: First payload
+            payload2: Second payload
+            strategy: Merge strategy ('concatenate', 'interleave', 'best_segments', 'hierarchical')
+
+        Returns:
+            Tuple of (merged_payload, unit_id, success)
+        """
+        if not self.enable_swarm_fusion or self.swarm_fusion is None:
+            self.logger.warning("Swarm fusion not enabled")
+            return payload1 + payload2, "", False
+
+        try:
+            # Convert payloads to individuals
+            from hive_zero_core.agents.genetic_operators import Individual
+
+            ind1 = Individual(payload1, fitness=0.7, generation=0)
+            ind2 = Individual(payload2, fitness=0.7, generation=0)
+
+            # Map strategy string to enum
+            strategy_map = {
+                'concatenate': MergeStrategy.CONCATENATE,
+                'interleave': MergeStrategy.INTERLEAVE,
+                'best_segments': MergeStrategy.BEST_SEGMENTS,
+                'hierarchical': MergeStrategy.HIERARCHICAL,
+            }
+
+            merge_strategy = strategy_map.get(strategy, MergeStrategy.BEST_SEGMENTS)
+
+            # Merge
+            unit = self.swarm_fusion.merge_individuals(ind1, ind2, merge_strategy)
+
+            self.logger.info(f"Merged payloads into swarm unit: {unit}")
+
+            return unit.genome, unit.id, True
+
+        except Exception as e:
+            self.logger.error(f"Payload merge failed: {e}")
+            return payload1 + payload2, "", False
+
+    def create_swarm_unit(self, payloads: list, strategy: str = "hierarchical") -> tuple:
+        """
+        Create a mega swarm unit from multiple payloads.
+
+        Args:
+            payloads: List of payload strings
+            strategy: Merge strategy to use
+
+        Returns:
+            Tuple of (mega_payload, unit_id, stats)
+        """
+        if not self.enable_swarm_fusion or self.swarm_fusion is None:
+            return "", "", {'enabled': False}
+
+        if len(payloads) < 2:
+            return payloads[0] if payloads else "", "", {'error': 'Need at least 2 payloads'}
+
+        try:
+            from hive_zero_core.agents.genetic_operators import Individual
+            from hive_zero_core.agents.swarm_fusion import SwarmUnit
+
+            # Convert payloads to swarm units
+            units = []
+            for i, payload in enumerate(payloads):
+                ind = Individual(payload, fitness=0.7 + i * 0.05, generation=0)
+                unit = SwarmUnit(
+                    id="",
+                    genome=payload,
+                    fitness=ind.fitness,
+                    generation=0,
+                    members=[str(ind.gene_seed)],
+                    level=0
+                )
+                units.append(unit)
+
+            # Create mega-unit
+            mega_unit = self.swarm_fusion.create_mega_unit(units)
+
+            stats = self.swarm_fusion.get_statistics()
+            stats['unit_id'] = mega_unit.id
+            stats['level'] = mega_unit.level
+            stats['member_count'] = len(mega_unit.members)
+
+            self.logger.info(f"Created mega swarm unit: {mega_unit}")
+
+            return mega_unit.genome, mega_unit.id, stats
+
+        except Exception as e:
+            self.logger.error(f"Swarm unit creation failed: {e}")
+            return "", "", {'error': str(e)}
+
+    def assign_specialization(self, unit_id: str, specialization: str) -> bool:
+        """
+        Assign specialization to a swarm unit.
+
+        Args:
+            unit_id: ID of the swarm unit
+            specialization: Type (e.g., 'evasion', 'obfuscation', 'stealth')
+
+        Returns:
+            True if successful
+        """
+        if not self.enable_swarm_fusion or not self.collective_intelligence:
+            return False
+
+        try:
+            unit = self.swarm_fusion.swarm_registry.get(unit_id)
+            if unit:
+                self.collective_intelligence.assign_specialization(unit, specialization)
+                return True
+            return False
+        except Exception as e:
+            self.logger.error(f"Specialization assignment failed: {e}")
+            return False
+
+    def form_optimal_swarm(self, n_units: int = 4) -> list:
+        """
+        Form an optimal team of swarm units based on synergy.
+
+        Args:
+            n_units: Team size
+
+        Returns:
+            List of optimized swarm units
+        """
+        if not self.enable_swarm_fusion or not self.collective_intelligence:
+            return []
+
+        try:
+            all_units = list(self.swarm_fusion.swarm_registry.values())
+            if not all_units:
+                return []
+
+            team = self.collective_intelligence.form_optimal_team(all_units, n_units)
+
+            self.logger.info(f"Formed optimal swarm of {len(team)} units")
+
+            return team
+
+        except Exception as e:
+            self.logger.error(f"Swarm formation failed: {e}")
+            return []
+
+    def get_swarm_statistics(self) -> dict:
+        """
+        Get comprehensive statistics about swarm fusion and collective intelligence.
+
+        Returns:
+            Dictionary with swarm stats
+        """
+        if not self.enable_swarm_fusion:
+            return {'enabled': False}
+
+        stats = {'enabled': True}
+
+        try:
+            stats['fusion'] = self.swarm_fusion.get_statistics()
+            stats['collective'] = self.collective_intelligence.get_collective_stats()
+        except Exception as e:
+            stats['error'] = str(e)
+
         return stats
