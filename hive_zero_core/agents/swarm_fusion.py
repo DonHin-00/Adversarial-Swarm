@@ -59,7 +59,7 @@ class SwarmUnit:
 
     def _generate_id(self) -> str:
         """Generate unique ID for this unit."""
-        content = f"{self.genome}{self.generation}{random.random()}"
+        content = f"{self.genome}{self.generation}{SecureRandom.random_float()}"
         return hashlib.md5(content.encode()).hexdigest()[:12]
 
     def __repr__(self):
@@ -305,7 +305,7 @@ class SwarmFusion:
 
         for i in range(max_len):
             # Probabilistic selection based on fitness
-            if random.random() < ratio:
+            if SecureRandom.random_float() < ratio:
                 if i < len(lines1):
                     merged.append(lines1[i])
                 elif i < len(lines2):

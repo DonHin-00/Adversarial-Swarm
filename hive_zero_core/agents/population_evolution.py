@@ -120,11 +120,11 @@ class PopulationManager:
 
         while len(self.population) < self.population_size and attempts < max_attempts:
             attempts += 1
-            gene_seed = random.randint(0, 100000)
+            gene_seed = SecureRandom.random_int(0, 100000)
 
             try:
                 # Mutate seed with varying mutation rates
-                varied_rate = random.uniform(0.2, 0.8)
+                varied_rate = (SecureRandom.random_float() * (0.8 - (0.2)) + (0.2))
                 mutated_genome = engine.mutate_code(seed_genome, gene_seed, varied_rate)
 
                 if validator(mutated_genome):
@@ -142,7 +142,7 @@ class PopulationManager:
         # Fill remaining slots with random variations if needed
         while len(self.population) < self.population_size:
             # Add slight variations
-            base = random.choice(self.population[:len(self.population)//2 + 1])
+            base = SecureRandom.random_choice(self.population[:len(self.population)//2 + 1])
             individual = Individual(base.genome + f"\n# GEN_0_{len(self.population)}", 0.0, 0)
             if validator(individual.genome):
                 individual.fitness = self.fitness_function.evaluate(
@@ -222,7 +222,7 @@ class PopulationManager:
         # Generate offspring
         while len(next_gen) < self.population_size:
             # Selection
-            if random.random() < 0.7:  # Tournament selection 70% of the time
+            if SecureRandom.random_float() < 0.7:  # Tournament selection 70% of the time
                 parent1 = self.selection.tournament_selection(self.population, 3)
                 parent2 = self.selection.tournament_selection(self.population, 3)
             else:  # Roulette selection 30% of the time
@@ -230,8 +230,8 @@ class PopulationManager:
                 parent2 = self.selection.roulette_selection(self.population)
 
             # Crossover
-            if random.random() < self.crossover_rate:
-                if random.random() < 0.6:  # Single-point 60%
+            if SecureRandom.random_float() < self.crossover_rate:
+                if SecureRandom.random_float() < 0.6:  # Single-point 60%
                     offspring1, offspring2 = self.operators.crossover_single_point(
                         parent1, parent2, self.current_generation + 1
                     )
@@ -272,11 +272,11 @@ class PopulationManager:
 
     def _apply_mutations(self, individual: Individual) -> Individual:
         """Apply various mutations to an individual."""
-        if random.random() > self.mutation_rate:
+        if SecureRandom.random_float() > self.mutation_rate:
             return individual
 
         # Choose mutation type
-        mutation_type = random.choice(['insertion', 'deletion', 'swap', 'polymorphic'])
+        mutation_type = SecureRandom.random_choice(['insertion', 'deletion', 'swap', 'polymorphic'])
 
         try:
             if mutation_type == 'insertion':
@@ -290,7 +290,7 @@ class PopulationManager:
                 from hive_zero_core.agents.genetic_evolution import PolymorphicEngine
                 engine = PolymorphicEngine()
                 mutated_genome = engine.mutate_code(individual.genome,
-                                                   random.randint(0, 100000),
+                                                   SecureRandom.random_int(0, 100000),
                                                    self.mutation_rate)
                 individual = Individual(mutated_genome, 0.0, individual.generation)
 

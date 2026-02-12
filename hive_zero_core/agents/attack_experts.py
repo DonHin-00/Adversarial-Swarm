@@ -897,9 +897,8 @@ class Agent_WAFBypass(BaseExpert):
     def _case_variation(self, payload: str) -> str:
         """Randomly vary case to evade signature matching. REINFORCED with seed."""
         try:
-            import random
-            # Use consistent seed for reproducibility in testing
-            return ''.join(c.upper() if random.random() > 0.5 else c.lower() for c in payload)
+            # Use SecureRandom for unpredictable case variation
+            return ''.join(c.upper() if SecureRandom.random_float() > 0.5 else c.lower() for c in payload)
         except Exception as e:
             self.logger.error(f"Case variation failed: {e}")
             return payload

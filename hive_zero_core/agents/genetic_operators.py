@@ -33,7 +33,7 @@ class Individual:
         self.genome = genome
         self.fitness = fitness
         self.generation = generation
-        self.gene_seed = random.randint(0, 100000)
+        self.gene_seed = SecureRandom.random_int(0, 100000)
         self.parents = []  # Track lineage
 
     def __repr__(self):
@@ -163,7 +163,7 @@ class GeneticOperators:
 
         # Choose crossover point
         min_len = min(len(g1), len(g2))
-        point = random.randint(1, min_len - 1)
+        point = SecureRandom.random_int(1, min_len - 1)
 
         # Create offspring
         offspring1_genome = g1[:point] + g2[point:]
@@ -204,7 +204,7 @@ class GeneticOperators:
 
         # Uniform selection
         offspring_genome = ''.join(
-            g1_padded[i] if random.random() < probability else g2_padded[i]
+            g1_padded[i] if SecureRandom.random_float() < probability else g2_padded[i]
             for i in range(max_len)
         ).rstrip()
 
@@ -231,8 +231,8 @@ class GeneticOperators:
             return individual
 
         genome = individual.genome
-        insertion = random.choice(gene_pool)
-        position = random.randint(0, len(genome))
+        insertion = SecureRandom.random_choice(gene_pool)
+        position = SecureRandom.random_int(0, len(genome))
 
         mutated_genome = genome[:position] + insertion + genome[position:]
         mutated = Individual(mutated_genome, 0.0, individual.generation)
@@ -258,8 +258,8 @@ class GeneticOperators:
         if len(genome) < 3:
             return individual
 
-        delete_len = random.randint(1, min(max_delete, len(genome) // 2))
-        position = random.randint(0, len(genome) - delete_len)
+        delete_len = SecureRandom.random_int(1, min(max_delete, len(genome) // 2))
+        position = SecureRandom.random_int(0, len(genome) - delete_len)
 
         mutated_genome = genome[:position] + genome[position + delete_len:]
         mutated = Individual(mutated_genome, 0.0, individual.generation)
@@ -285,8 +285,8 @@ class GeneticOperators:
             return individual
 
         # Choose two random positions
-        pos1 = random.randint(0, len(genome) - 2)
-        pos2 = random.randint(pos1 + 1, len(genome) - 1)
+        pos1 = SecureRandom.random_int(0, len(genome) - 2)
+        pos2 = SecureRandom.random_int(pos1 + 1, len(genome) - 1)
 
         # Swap
         genome[pos1], genome[pos2] = genome[pos2], genome[pos1]
@@ -321,7 +321,7 @@ class SelectionStrategies:
         if not population:
             raise ValueError("Population cannot be empty")
 
-        tournament = random.sample(population, min(tournament_size, len(population)))
+        tournament = SecureRandom.random_sample(population, min(tournament_size, len(population)))
         winner = max(tournament, key=lambda ind: ind.fitness)
 
         logger.debug(f"Tournament: selected individual with fitness {winner.fitness:.3f}")
@@ -346,9 +346,9 @@ class SelectionStrategies:
 
         if total_fitness == 0:
             # All zero fitness, random selection
-            return random.choice(population)
+            return SecureRandom.random_choice(population)
 
-        pick = random.uniform(0, total_fitness)
+        pick = (SecureRandom.random_float() * (total_fitness - (0)) + (0))
         current = 0
 
         for individual in population:

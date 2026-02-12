@@ -598,7 +598,7 @@ class VariantBreeder:
         
         merged = []
         for i in range(len(genome2)):
-            if random.random() < 0.5:
+            if SecureRandom.random_float() < 0.5:
                 merged.append(genome1[i])
             else:
                 merged.append(genome2[i])
@@ -641,7 +641,7 @@ class VariantBreeder:
         
         for parent in parents:
             # Decide whether to cross-breed
-            if random.random() < cross_breed_rate and len(parents) > 1 and len(roles) > 1:
+            if SecureRandom.random_float() < cross_breed_rate and len(parents) > 1 and len(roles) > 1:
                 # Cross-breed with another parent
                 other_parent = SecureRandom.random_choice([p for p in parents if p != parent])
                 role1 = SecureRandom.random_choice(roles)
