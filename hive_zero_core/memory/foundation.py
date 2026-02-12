@@ -51,30 +51,6 @@ class SyntheticExperienceGenerator:
         obs = obs[idx]
 
         # 2. Optimal Actions (Instincts) - vectorized computation
-        Returns (obs, action, reward, next_obs, done) simulating optimal behaviour.
-
-        Args:
-            batch_size: Number of experience tuples to generate.
-            device:     Target device for all tensors (default: CPU).
-        """
-        if device is None:
-            device = torch.device("cpu")
-
-        # ---- Observations (mixture of three clusters) ----
-        n_idle = batch_size // 3
-        n_scan = batch_size // 3
-        n_attack = batch_size - n_idle - n_scan
-
-        idle_obs = torch.randn(n_idle, self.obs_dim, device=device) * 0.1
-        scan_obs = torch.randn(n_scan, self.obs_dim, device=device) * 0.5
-        scan_obs[:, :min(10, self.obs_dim)] += 2.0
-
-        attack_obs = torch.abs(torch.randn(n_attack, self.obs_dim, device=device)) * 2.0
-
-        obs = torch.cat([idle_obs, scan_obs, attack_obs], dim=0)
-        obs = obs[torch.randperm(batch_size, device=device)]
-
-        # ---- Optimal actions ----
         obs_mag = obs.mean(dim=1, keepdim=True)
         actions = torch.zeros(batch_size, self.act_dim, device=device)
 
@@ -87,17 +63,12 @@ class SyntheticExperienceGenerator:
         actions += low_mask * pattern.unsqueeze(0)
 
         # 3. Rewards: High rewards for this synthetic data (it represents "Winning")
-        rewards = torch.full((batch_size, 1), 10.0) # More efficient than ones * 10.0
+        rewards = torch.full((batch_size, 1), 10.0)
 
         # 4. Next Obs (State Transitions)
         # Assume successful mitigation reduces threat (next state is calmer)
-        low_mask = 1.0 - high_mask
-        pattern = torch.sin(torch.linspace(0, 10, self.act_dim, device=device))
-        actions += low_mask * pattern.unsqueeze(0).expand(batch_size, -1)
-
-        rewards = torch.ones(batch_size, 1, device=device) * 10.0
         next_obs = obs * 0.1
-        dones = torch.zeros(batch_size, 1, device=device)
+        dones = torch.zeros(batch_size, 1)
 
         return obs, actions, rewards, next_obs, dones
 

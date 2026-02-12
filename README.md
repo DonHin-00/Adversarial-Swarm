@@ -14,7 +14,7 @@ HIVE-ZERO uses a **Sparse Mixture-of-Experts (MoE)** architecture with a learned
 | Cluster | Experts | Purpose |
 |---------|---------|---------|
 | **A — Recon** | Cartographer (3-layer GAT), DeepScope (Multi-Head Attn Mask), Chronos (Transformer Temporal) | Network mapping, constraint enforcement, timing |
-| **B — Attack** | Sentinel (BERT), PayloadGen (T5), Mutator (Adam Optimiser) | Payload classification, generation, and adversarial optimisation |
+| **B — Attack** | Sentinel (BERT), PayloadGen (T5), Mutator (Adam Optimiser + Genetic Evolution) | Payload classification, generation, and adversarial optimisation with polymorphic capabilities |
 | **C — Post-Exploit** | Mimic (Spectral-Norm GAN), Ghost (Entropy-Gated), Stego (VAE), Cleaner (Residual) | Traffic shaping, hiding, steganography, cleanup |
 | **D — Active Defense** | Tarpit (25 traps, Multi-Head Attn Fusion) | Spectral/temporal/chaotic trap arsenal with attention-weighted fusion |
 | **E — Kill Chain** | FeedbackLoop (Multi-Scale), Flashbang (Adaptive Burst), GlassHouse (Phase-Modulated) | Counter-strike synergisers auto-activated with Tarpit |
@@ -50,7 +50,8 @@ hive_zero_core/
 ├── agents/
 │   ├── base_expert.py        # Abstract expert base class with gating logic
 │   ├── recon_experts.py      # Cartographer, DeepScope, Chronos
-│   ├── attack_experts.py     # Sentinel, PayloadGen, Mutator
+│   ├── attack_experts.py     # Sentinel, PayloadGen, Mutator (with genetic evolution)
+│   ├── genetic_evolution.py  # Polymorphic engine, natural selection, generation tracking
 │   ├── defense_experts.py    # Tarpit with TrapArsenal
 │   ├── post_experts.py       # Mimic, Ghost, Stego, Cleaner
 │   ├── offensive_defense.py  # FeedbackLoop, Flashbang, GlassHouse
@@ -159,6 +160,39 @@ hive.evolve_threat_intel(results)
 # Inspect threat intelligence state
 stats = hive.threat_intel.get_stats()
 print(f"Generation {stats['generation']}, Evasion rate: {stats['avg_evasion_rate']:.1%}")
+```
+
+### Genetic Evolution for Red Team
+
+Use polymorphic capabilities to evolve attack payloads:
+
+```python
+from hive_zero_core.agents.genetic_evolution import GeneticEvolution
+
+# Initialize evolution engine
+evolution = GeneticEvolution()
+
+# Evolve a payload through generations
+payload = "' OR '1'='1"
+mutated, gene_seed, success = evolution.evolve_payload(payload)
+
+# Evolve Python exploit code
+exploit_code = """
+def exploit():
+    # attack logic
+    pass
+"""
+mutated_code, gene_seed, success = evolution.evolve_code(exploit_code)
+
+# Get evolution statistics
+stats = evolution.get_stats()
+print(f"Success rate: {stats['success_rate']:.1%}")
+```
+
+For more details, see [Genetic Evolution Guide](docs/GENETIC_EVOLUTION.md) and run the demo:
+
+```bash
+python scripts/demo_genetic_evolution.py
 ```
 
 ### Training the System
