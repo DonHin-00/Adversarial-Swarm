@@ -197,11 +197,18 @@ class LogEncoder(nn.Module):
         received, preserving the actual event sequence.
 
         Args:
-            max_len: Maximum sequence length to return
+            max_len: Maximum sequence length to return (limits to most recent timestamps)
 
         Returns:
             Tensor of inter-arrival times [1, seq_len] suitable for Chronos agent.
+            The sequence length will be min(len(timestamps)-1, max_len-1), representing
+            the actual number of intervals available without artificial padding.
             Returns sequence of zeros if insufficient timestamps available.
+
+        Note:
+            The Chronos agent handles variable-length sequences via its transformer
+            architecture, so no padding is needed. This preserves the true temporal
+            characteristics of the data.
         """
         device = self.ip_projection.weight.device
 
