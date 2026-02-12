@@ -53,26 +53,47 @@ class LogEncoder(nn.Module):
             self.next_idx += 1
         return self.ip_to_idx[ip]
 
-    def _parse_timestamp(self, timestamp_str: str) -> Optional[float]:
+    def _parse_timestamp(self, timestamp) -> Optional[float]:
         """
-        Parse timestamp string to Unix epoch time.
-        Supports ISO 8601 format and common variations.
+        Parse timestamp-like input to Unix epoch time.
+        Supports ISO 8601 strings, common string variations, numeric epoch
+        seconds, and datetime objects.
         """
+        # Handle explicit None early
+        if timestamp is None:
+            return None
+
+        # If it's already a datetime instance, convert directly
+        if isinstance(timestamp, datetime):
+            return timestamp.timestamp()
+
+        # If it's numeric, treat it as epoch seconds
+        if isinstance(timestamp, (int, float)):
+            return float(timestamp)
+
+        # Fallback: work with a string representation
+        try:
+            timestamp_str = str(timestamp)
+        except Exception:
+            logger.debug(f"Could not convert timestamp to string: {timestamp!r}")
+            return None
+
         if not timestamp_str:
             return None
+
         try:
             # Try ISO 8601 format
-            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
             return dt.timestamp()
-        except (ValueError, AttributeError):
+        except (ValueError, TypeError, AttributeError):
             # Try other common formats
             for fmt in ["%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"]:
                 try:
                     dt = datetime.strptime(timestamp_str, fmt)
                     return dt.timestamp()
-                except ValueError:
+                except (ValueError, TypeError):
                     continue
-            logger.debug(f"Could not parse timestamp: {timestamp_str}")
+            logger.debug(f"Could not parse timestamp: {timestamp_str!r}")
             return None
 
     def reset(self):
@@ -197,13 +218,13 @@ class LogEncoder(nn.Module):
         received, preserving the actual event sequence.
 
         Args:
-            max_len: Maximum sequence length to return (limits to most recent timestamps)
+            max_len: Maximum number of intervals to return (must be >= 2 to produce any intervals)
 
         Returns:
             Tensor of inter-arrival times [1, seq_len] suitable for Chronos agent.
-            The sequence length will be min(len(timestamps)-1, max_len-1), representing
+            The sequence length will be min(len(timestamps)-1, max_len), representing
             the actual number of intervals available without artificial padding.
-            Returns sequence of zeros if insufficient timestamps available.
+            Returns zeros with shape [1, max(max_len, 2)] if insufficient timestamps available.
 
         Note:
             The Chronos agent handles variable-length sequences via its transformer
@@ -212,12 +233,16 @@ class LogEncoder(nn.Module):
         """
         device = self.ip_projection.weight.device
 
+        # Ensure max_len is at least 2 to produce meaningful intervals
+        max_len = max(2, max_len)
+
         if len(self.timestamps) < 2:
-            # Not enough data, return zeros
-            return torch.zeros(1, min(max_len, 10), device=device)
+            # Not enough data, return zeros with consistent shape
+            return torch.zeros(1, max_len, device=device)
 
         # Use most recent timestamps in the order they were added
-        recent_times = self.timestamps[-max_len:]
+        # Note: We need max_len+1 timestamps to produce max_len intervals
+        recent_times = self.timestamps[-(max_len + 1):]
 
         # Compute inter-arrival times (differences between consecutive timestamps)
         inter_arrivals = [recent_times[i+1] - recent_times[i] for i in range(len(recent_times) - 1)]
@@ -227,4 +252,5 @@ class LogEncoder(nn.Module):
             inter_arrival_tensor = torch.tensor(inter_arrivals, dtype=torch.float32, device=device)
             return inter_arrival_tensor.unsqueeze(0)  # [1, seq_len]
         else:
-            return torch.zeros(1, 10, device=device)
+            # Fallback with consistent shape
+            return torch.zeros(1, max_len, device=device)

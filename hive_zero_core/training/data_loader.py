@@ -135,7 +135,7 @@ class NetworkLogDataset:
             logs = data
         else:
             logger.warning(f"Unexpected JSON structure in {filepath}")
-            return []
+            raise ValueError(f"Unexpected JSON structure in {filepath}")
 
         logger.info(f"Loaded {len(logs)} logs from JSON file {filepath}")
         return logs
