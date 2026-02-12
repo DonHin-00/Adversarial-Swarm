@@ -59,13 +59,15 @@ class LogEncoder(nn.Module):
             - edge_index: Graph connectivity [2, num_edges]
             - edge_attr: Edge features [num_edges, edge_feature_dim * 2]
         """
+        # Get device from module parameters for device-aware tensor creation
+        device = self.ip_projection.weight.device
+        
         if not logs:
-            # Return empty graph with correct feature dimensions
-            # Even with 0 nodes, feature dim must match expectation
+            # Return empty graph with correct feature dimensions on correct device
             return Data(
-                x=torch.zeros((0, self.node_feature_dim)),
-                edge_index=torch.empty((2, 0), dtype=torch.long),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2))
+                x=torch.zeros((0, self.node_feature_dim), device=device),
+                edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device)
             )
 
         src_indices = []

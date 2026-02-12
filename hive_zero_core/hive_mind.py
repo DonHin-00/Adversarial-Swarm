@@ -88,6 +88,11 @@ class HiveMind(nn.Module):
             "Sentinel", "Mimic", "Ghost", "Stego", "Cleaner",
             "Tarpit", "FeedbackLoop", "Flashbang", "GlassHouse"
         ]
+        if len(self.experts) != len(expected_names):
+            raise ValueError(
+                f"Expected {len(expected_names)} experts but found {len(self.experts)} in self.experts. "
+                "Expert ordering and membership must be kept in sync with expected_names for correct gating."
+            )
         for idx, (expert, expected_name) in enumerate(zip(self.experts, expected_names)):
             if expert.name != expected_name:
                 raise ValueError(
@@ -120,7 +125,10 @@ class HiveMind(nn.Module):
         if data.x.size(0) > 0:
             global_state = torch.mean(data.x, dim=0, keepdim=True)
         else:
-            global_state = torch.zeros(1, self.observation_dim)
+            # Create fallback global_state on the correct device and dtype
+            device = next(self.parameters()).device
+            dtype = next(self.parameters()).dtype
+            global_state = torch.zeros(1, self.observation_dim, device=device, dtype=dtype)
 
         weights = self.gating_network(global_state)
 

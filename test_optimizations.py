@@ -49,11 +49,16 @@ def test_synthetic_data_generation():
     return elapsed
 
 def test_hive_mind_forward():
-    """Test HiveMind with index-based expert dispatch."""
+    """Test HiveMind with index-based expert dispatch.
+    
+    Note: This test is skipped because it requires HuggingFace models.
+    The index-based dispatch has been verified in code review.
+    """
     print("\nTesting HiveMind optimization...")
     print("  (Skipping - requires HuggingFace models)")
     print("  Index-based dispatch verified in code review")
-    return 0.0
+    # Return None to indicate skip rather than 0.0 which implies success
+    return None
 
 def test_tarpit_caching():
     """Test Agent_Tarpit with trap caching."""
@@ -65,23 +70,33 @@ def test_tarpit_caching():
     
     x = torch.randn(1, 64)
     
-    # First forward pass (no cache)
+    # First forward pass in training mode (no cache)
+    tarpit.train()
     start = time.time()
     out1 = tarpit(x)
     elapsed1 = time.time() - start
     
-    # Second forward pass (with cache)
+    # Second forward pass in eval mode (with cache)
+    tarpit.eval()
     start = time.time()
     out2 = tarpit(x)
     elapsed2 = time.time() - start
     
+    # Third forward pass in eval mode (should use cache)
+    start = time.time()
+    out3 = tarpit(x)
+    elapsed3 = time.time() - start
+    
     assert out1.shape == (1, 64), "Output should have correct shape"
     assert out2.shape == (1, 64), "Output should have correct shape"
+    assert out3.shape == (1, 64), "Output should have correct shape"
     print(f"✓ Agent_Tarpit test passed")
-    print(f"  First pass: {elapsed1*1000:.2f}ms")
-    print(f"  Second pass (cached): {elapsed2*1000:.2f}ms")
-    print(f"  Speedup: {elapsed1/elapsed2:.2f}x")
-    return elapsed1, elapsed2
+    print(f"  Training mode: {elapsed1*1000:.2f}ms")
+    print(f"  Eval mode (first): {elapsed2*1000:.2f}ms")
+    print(f"  Eval mode (cached): {elapsed3*1000:.2f}ms")
+    if elapsed3 < elapsed2:
+        print(f"  Speedup: {elapsed2/elapsed3:.2f}x")
+    return elapsed2, elapsed3
 
 def main():
     print("=" * 60)
@@ -101,8 +116,11 @@ def main():
         print("\nSummary:")
         print(f"  LogEncoder: {log_encoder_time*1000:.2f}ms")
         print(f"  SyntheticExperienceGenerator: {synth_time*1000:.2f}ms")
-        print(f"  HiveMind forward pass: {hive_time*1000:.2f}ms")
-        print(f"  Agent_Tarpit (with caching): {tarpit_time2*1000:.2f}ms")
+        if hive_time is not None:
+            print(f"  HiveMind forward pass: {hive_time*1000:.2f}ms")
+        else:
+            print(f"  HiveMind forward pass: skipped")
+        print(f"  Agent_Tarpit eval mode (cached): {tarpit_time2*1000:.2f}ms")
         
     except Exception as e:
         print(f"\n✗ Test failed with error: {e}")
