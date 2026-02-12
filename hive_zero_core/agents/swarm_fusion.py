@@ -85,7 +85,7 @@ class SwarmFusion:
         self.max_unit_size = max_unit_size
         self.swarm_registry: Dict[str, SwarmUnit] = {}
         self.merge_count = 0
-        
+
         # Capability management
         self.capability_manager = CapabilityManager()
 
@@ -124,10 +124,10 @@ class SwarmFusion:
         
         if unit.emergent_behaviors:
             logger.info(f"🌟 EMERGENT BEHAVIOR DETECTED in {unit.id[:8]}: {', '.join(unit.emergent_behaviors)}")
-        
-        # Apply power multiplier to fitness
-        unit.fitness *= (1 + (unit.power_multiplier - 1) * 0.3)  # 30% of power boost goes to fitness
-        
+
+        # Don't modify fitness with power_multiplier to avoid fitness inflation
+        # Keep power as separate dimension for selection/merging heuristics
+
         return unit
 
     def merge_individuals(self, individual1: Individual, individual2: Individual,
@@ -176,8 +176,8 @@ class SwarmFusion:
             fitness=merged_fitness,
             generation=generation,
             members=[
-                getattr(individual1, 'gene_seed', f"ind_{hash(individual1.genome)%10000}"),
-                getattr(individual2, 'gene_seed', f"ind_{hash(individual2.genome)%10000}")
+                str(getattr(individual1, 'gene_seed', f"ind_{hash(individual1.genome)%10000}")),
+                str(getattr(individual2, 'gene_seed', f"ind_{hash(individual2.genome)%10000}"))
             ],
             level=1,
             merge_count=1,  # First merge
@@ -214,11 +214,8 @@ class SwarmFusion:
             Larger merged SwarmUnit
         """
         # Check size constraints
-        total_members = len(unit1.members) + len(unit2.members)
-        if total_members > self.max_unit_size:
-            logger.warning(f"Merge would exceed max_unit_size ({total_members} > {self.max_unit_size})")
-            # Proceed but truncate member list
-            total_members = self.max_unit_size
+        if len(unit1.members) + len(unit2.members) > self.max_unit_size:
+            logger.warning(f"Merge would exceed max_unit_size")
 
         # Hierarchical merge - preserve structure
         if strategy == MergeStrategy.HIERARCHICAL:
@@ -338,15 +335,15 @@ def execute_swarm():
     results = []
     try:
         results.append(_strategy_alpha())
-    except Exception as e:
+    except Exception:
         pass
     try:
         results.append(_strategy_beta())
-    except Exception as e:
+    except Exception:
         pass
     return results
 
-# Auto-execute on import
+# Execute only when run as a script
 if __name__ == "__main__":
     execute_swarm()
 '''
@@ -521,7 +518,8 @@ class CollectiveIntelligence:
         if specialization not in self.specializations:
             self.specializations[specialization] = []
 
-        self.specializations[specialization].append(unit.id)
+        if unit.id not in self.specializations[specialization]:
+            self.specializations[specialization].append(unit.id)
 
         logger.info(f"Unit {unit.id[:8]} specialized in: {specialization}")
 

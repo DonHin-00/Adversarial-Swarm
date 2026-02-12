@@ -6,7 +6,7 @@ capabilities. The more merges, the more capabilities unlock.
 """
 
 import logging
-import random
+import numpy as np
 from typing import List, Dict, Set, Optional
 from enum import Enum
 from dataclasses import dataclass, field
@@ -35,6 +35,7 @@ class Capability:
     unlock_threshold: int  # Number of merges required
     prerequisites: List[str] = field(default_factory=list)
     synergy_bonus: float = 1.0
+    mitre_attack_id: Optional[str] = None  # MITRE ATT&CK technique ID (e.g., "T1055.012")
 
     def __repr__(self):
         return f"Capability({self.name}, tier={self.tier.name}, power={self.power_multiplier:.2f}x)"
@@ -743,39 +744,46 @@ class CapabilityManager:
     def calculate_power_multiplier(self, unit_id: str) -> float:
         """
         Calculate total power multiplier from all unlocked capabilities.
+        Uses bounded formulation to prevent explosion.
 
         Args:
             unit_id: ID of the swarm unit
 
         Returns:
-            Total power multiplier
+            Total power multiplier (bounded growth)
         """
         capabilities = self.get_unit_capabilities(unit_id)
 
         if not capabilities:
             return 1.0
 
-        # Base multiplier from all capabilities
-        base_multiplier = sum(cap.power_multiplier for cap in capabilities)
+        # Use logarithmic scaling to prevent explosion
+        # Base power from capability count
+        base_power = 1.0 + np.log1p(len(capabilities)) * 0.5
 
-        # Synergy bonuses (multiplicative)
+        # Add modest bonuses from individual multipliers (capped)
+        capability_bonus = 0.0
+        for cap in capabilities:
+            # Cap individual contribution to prevent explosion
+            capability_bonus += min(cap.power_multiplier - 1.0, 2.0)
+
+        # Add synergy bonuses (also capped)
         synergy_multiplier = 1.0
         for cap in capabilities:
             if cap.synergy_bonus > 1.0:
-                synergy_multiplier *= cap.synergy_bonus
+                # Multiplicative synergy but capped
+                synergy_multiplier *= min(cap.synergy_bonus, 1.5)
 
-        # Tier escalation bonus (higher tiers get exponential boost)
-        tier_bonus = 1.0
-        for cap in capabilities:
-            if cap.tier.value >= CapabilityTier.ELITE.value:
-                tier_bonus += cap.tier.value * 0.5
+        # Bounded final calculation
+        final_multiplier = base_power * (1.0 + capability_bonus * 0.1) * min(synergy_multiplier, 3.0)
 
-        total_multiplier = base_multiplier * synergy_multiplier * tier_bonus
+        # Hard cap to prevent any explosion
+        result = min(final_multiplier, 100.0)
 
-        logger.debug(f"Power multiplier for {unit_id[:8]}: {total_multiplier:.2f}x "
-                    f"(base={base_multiplier:.2f}, synergy={synergy_multiplier:.2f}, tier={tier_bonus:.2f})")
+        logger.debug(f"Power multiplier for {unit_id[:8]}: {result:.2f}x "
+                    f"(base={base_power:.2f}, cap_bonus={capability_bonus:.2f}, synergy={synergy_multiplier:.2f})")
 
-        return total_multiplier
+        return result
 
     def get_tier_for_merge_count(self, merge_count: int) -> CapabilityTier:
         """Determine capability tier based on merge count."""

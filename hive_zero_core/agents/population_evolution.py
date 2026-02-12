@@ -7,7 +7,7 @@ and multi-generational evolution for payload and code optimization.
 
 import logging
 import random
-from typing import List, Optional, Callable, Dict, Tuple
+from typing import List, Optional, Callable, Dict
 import numpy as np
 
 from hive_zero_core.agents.genetic_operators import (
@@ -246,7 +246,7 @@ class PopulationManager:
             offspring2 = self._apply_mutations(offspring2)
 
             # Validate and evaluate
-            for offspring in [offspring1, offspring2]:
+            for idx, offspring in enumerate([offspring1, offspring2]):
                 if len(next_gen) >= self.population_size:
                     break
 
@@ -256,9 +256,11 @@ class PopulationManager:
                     )
                     next_gen.append(offspring)
                 else:
-                    # Invalid offspring, try parent instead
+                    # Clone the corresponding parent instead of always using parent1
+                    fallback_parent = parent1 if idx == 0 else parent2
+                    logger.warning(f"Offspring {idx+1} failed validation, cloning corresponding parent")
                     if len(next_gen) < self.population_size:
-                        parent_copy = Individual(parent1.genome, parent1.fitness,
+                        parent_copy = Individual(fallback_parent.genome, fallback_parent.fitness,
                                                 self.current_generation + 1)
                         next_gen.append(parent_copy)
 

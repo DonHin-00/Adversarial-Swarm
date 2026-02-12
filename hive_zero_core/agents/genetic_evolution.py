@@ -43,16 +43,17 @@ class PolymorphicEngine:
             raise ValueError(f"mutation_rate must be between 0 and 1, got {mutation_rate}")
 
         try:
-            random.seed(gene_seed)
+            # Use local Random instance to avoid global RNG side effects
+            rng = random.Random(gene_seed)
             lines = source_code.split('\n')
             new_lines = []
             mutations_applied = 0
 
             # Genetic Markers (Junk Variables) - more variety
-            junk_vars = [f"_gene_{random.randint(1000, 9999)}" for _ in range(10)]
+            junk_vars = [f"_gene_{rng.randint(1000, 9999)}" for _ in range(10)]
             junk_types = [
-                lambda: f"{random.choice(junk_vars)} = {random.randint(0, 1000)} # GENE: {gene_seed}",
-                lambda: f"{random.choice(junk_vars)} = '{chr(random.randint(97, 122))}' * 0 # NOP",
+                lambda: f"{rng.choice(junk_vars)} = {rng.randint(0, 1000)} # GENE: {gene_seed}",
+                lambda: f"{rng.choice(junk_vars)} = '{chr(rng.randint(97, 122))}' * 0 # NOP",
                 lambda: f"pass  # GEN_{gene_seed}",
             ]
 
@@ -60,15 +61,21 @@ class PolymorphicEngine:
                 new_lines.append(line)
                 # Inject junk after function definitions, class definitions, or imports
                 line_stripped = line.strip()
-                if (line_stripped.startswith("def ") or
+                is_def_or_class = (
+                    line_stripped.startswith("def ") or
+                    line_stripped.startswith("class ")
+                )
+                is_import = (
                     line_stripped.startswith("import ") or
-                    line_stripped.startswith("from ") or
-                    line_stripped.startswith("class ")):
-
-                    if random.random() < mutation_rate:
+                    line_stripped.startswith("from ")
+                )
+                if is_def_or_class or is_import:
+                    if rng.random() < mutation_rate:
                         # Get indentation from original line
                         indent = len(line) - len(line.lstrip())
-                        junk_line = " " * (indent + 4) + random.choice(junk_types)()
+                        # Only def/class open a new block; imports keep the same indent
+                        extra_indent = 4 if is_def_or_class else 0
+                        junk_line = " " * (indent + extra_indent) + rng.choice(junk_types)()
                         new_lines.append(junk_line)
                         mutations_applied += 1
 
@@ -111,7 +118,8 @@ class PolymorphicEngine:
             raise ValueError(f"min_mutations must be non-negative, got {min_mutations}")
 
         try:
-            random.seed(gene_seed)
+            # Use local Random instance to avoid global RNG side effects
+            rng = random.Random(gene_seed)
             mutated = payload
 
             # Apply various string mutation techniques (more robust variations)
@@ -119,15 +127,15 @@ class PolymorphicEngine:
                 lambda s: s + f"#{gene_seed}",  # Comment padding
                 lambda s: f"/* GEN:{gene_seed} */{s}",  # C-style comment
                 lambda s: f"<!-- {gene_seed} -->{s}",  # HTML comment
-                lambda s: s.replace(" ", "  " if random.random() > 0.5 else " "),  # Whitespace variation
-                lambda s: s + "\x00" * random.randint(1, 2),  # Minimal null byte padding
+                lambda s: s.replace(" ", "  " if rng.random() > 0.5 else " "),  # Whitespace variation
+                lambda s: s + "\x00" * rng.randint(1, 2),  # Minimal null byte padding
                 lambda s: f"{s}\n-- GENE:{gene_seed}",  # SQL comment style
-                lambda s: s + " " * random.randint(1, 3),  # Trailing spaces
+                lambda s: s + " " * rng.randint(1, 3),  # Trailing spaces
             ]
 
             # Apply mutations
-            num_mutations = max(min_mutations, random.randint(min_mutations, min(3, len(mutations))))
-            selected_mutations = random.sample(mutations, num_mutations)
+            num_mutations = max(min_mutations, rng.randint(min_mutations, min(3, len(mutations))))
+            selected_mutations = rng.sample(mutations, num_mutations)
 
             for mutation_func in selected_mutations:
                 try:
@@ -475,7 +483,9 @@ class GeneticEvolution:
                 logger.info("Using fallback mutation")
                 self.tracker.increment_generation(fallback_seed, True, {'fallback': True})
                 return fallback_mutated, fallback_seed, True
-        except Exception:
+        except Exception as e:
+            # Log the failure and fall through to absolute fallback to avoid silent failures
+            logger.error(f"Error during fallback mutation: {e}")
             pass
 
         # Absolute fallback: return original

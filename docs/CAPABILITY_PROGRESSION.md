@@ -208,8 +208,8 @@ unit_3 = fusion.merge_units(unit_2, unit_4)
 # Create mega-unit (swarm intelligence)
 mega = fusion.create_mega_unit([unit_3, unit_5, unit_6, unit_7])
 # Power: 120x+
-# Unlocked: shared_memory_pool, self_repair, kernel_exploitation
-# Emergent: advanced_persistence, auto_propagation
+# Unlocked: process_hollowing, token_impersonation, driver_exploitation
+# Emergent: deep_persistence, living_off_the_land
 ```
 
 ## Key Insights

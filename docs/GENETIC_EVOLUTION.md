@@ -151,7 +151,7 @@ if mutator.enable_evolution:
 - Insert junk variables with random values
 - Add genetic markers as comments
 - Inject after function definitions and imports
-- Probabilistic insertion (30% chance per eligible line)
+- Probabilistic insertion (50% chance per eligible line - default mutation_rate=0.5)
 
 **String Mutations:**
 - Comment padding with gene seeds
