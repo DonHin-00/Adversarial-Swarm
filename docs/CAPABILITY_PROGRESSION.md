@@ -82,46 +82,46 @@ Where:
 
 ---
 
-### Swarm Intelligence (11-20 merges): **~120x Power**
+### Advanced Operations (11-20 merges): **~120x Power**
 **New Capabilities Unlocked:**
-- `shared_memory_pool` (6.0x, synergy 3.0x) - Distributed shared memory
-- `self_repair` (5.0x) - Automatic component regeneration
-- `kernel_exploitation` (7.0x) - Privilege escalation
-- `multi_architecture` (6.5x, synergy 2.5x) - Cross-platform code generation
+- `process_hollowing` (6.0x, synergy 3.0x) - PE image replacement in suspended processes
+- `token_impersonation` (5.0x) - Access token duplication for privilege escalation
+- `driver_exploitation` (7.0x) - Vulnerable signed driver abuse for kernel access
+- `dll_sideloading` (6.5x, synergy 2.5x) - DLL search order hijacking via legitimate binaries
 
 **What it can do:**
-- Share knowledge instantly across all agents
-- Repair and regenerate damaged components
-- Escalate to kernel-level privileges
-- Generate code for any architecture (x86, ARM, RISC-V)
-- Persist through system reboots
-- Operate as unified superintelligence
+- Inject code via process hollowing techniques
+- Escalate privileges through token manipulation
+- Exploit vulnerable drivers for kernel-level access
+- Execute code via DLL search order hijacking
+- Maintain persistence through multiple mechanisms
+- Evade EDR through legitimate process abuse
 
 **Emergent Behaviors:** 
-- **Advanced Persistence** (kernel + traffic mimicry)
-- **Auto-Propagation** (metamorphic + self-repair)
+- **Deep Persistence** (driver exploitation + traffic mimicry)
+- **Living Off The Land** (dll_sideloading + token_impersonation)
 
 **Real Power:** Previous (76x) + 6.0 + 5.0 + 7.0 + 6.5 = **100.5x base** × 3.0 × 2.5 synergy = **~251x total** (with tier bonus)
 
 ---
 
-### Superintelligence (21+ merges): **~500x Power**
+### Master Techniques (21+ merges): **~500x Power**
 **New Capabilities Unlocked:**
-- `fuzzing_engine` (10.0x, synergy 5.0x) - Coverage-guided generative fuzzing
-- `hypervisor_escape` (12.0x) - VM escape techniques
-- `firmware_persistence` (15.0x, synergy 10.0x) - UEFI/BIOS level implants
+- `com_hijacking` (10.0x, synergy 5.0x) - COM object hijacking for persistence
+- `memory_only_execution` (12.0x) - Reflective DLL injection and in-memory PE loading
+- `bootkit_persistence` (15.0x, synergy 10.0x) - MBR/VBR infection (requires admin)
 
 **What it can do:**
-- Generate novel exploits through fuzzing
-- Escape virtual machine isolation
-- Persist at firmware level (survives OS reinstalls)
-- Coordinate across hardware, hypervisor, OS, and application layers
-- Adapt faster than defenders can respond
-- Create entirely new attack vectors autonomously
+- Hijack COM objects for registry-based persistence
+- Execute completely in-memory without file artifacts
+- Persist at boot sector level (survives OS reinstalls)
+- Combine fileless techniques with boot-level persistence
+- Evade all file-based detection mechanisms
+- Operate across reboots and system reimaging
 
 **Emergent Behaviors:**
-- **Full Spectrum Dominance** (all apex capabilities)
-- **Critical Mass** (20+ capabilities)
+- **Advanced Threat Actor** (all master-tier capabilities)
+- **Full Arsenal** (20+ capabilities)
 
 **Real Power:** Previous (251x) + 10.0 + 12.0 + 15.0 = **288x base** × 5.0 × 10.0 synergy + tier escalation = **~14,400x total**
 
@@ -134,33 +134,33 @@ BASIC (Individual)
 ├── basic_mutation
 └── basic_obfuscation
 
-ENHANCED (Duo)
+ENHANCED (Coordinated)
 ├── polymorphic_encoding ← basic_mutation
 ├── multi_stage_execution
 └── timing_evasion
 
-ADVANCED (Squad)
+ADVANCED (Team)
 ├── parallel_exploitation ← multi_stage_execution
 ├── metamorphic_recompilation ← polymorphic_encoding
 ├── distributed_coordination
 └── environment_detection
 
-ELITE (Strike Force)
+ELITE (Coordinated Operations)
 ├── consensus_protocol ← distributed_coordination
 ├── behavior_learning ← metamorphic_recompilation
 ├── vulnerability_chaining ← parallel_exploitation + behavior_learning
 └── traffic_mimicry
 
-LEGENDARY (Swarm)
-├── shared_memory_pool ← consensus_protocol
-├── self_repair ← behavior_learning
-├── kernel_exploitation ← vulnerability_chaining + traffic_mimicry
-└── multi_architecture
+EXPERT (Advanced Techniques)
+├── process_hollowing ← consensus_protocol
+├── token_impersonation ← behavior_learning
+├── driver_exploitation ← vulnerability_chaining + traffic_mimicry
+└── dll_sideloading
 
-MYTHIC (Superintelligence)
-├── fuzzing_engine ← shared_memory_pool + kernel_exploitation
-├── hypervisor_escape ← multi_architecture + self_repair
-└── firmware_persistence ← fuzzing_engine + hypervisor_escape
+MASTER (Cutting-Edge Methods)
+├── com_hijacking ← process_hollowing + driver_exploitation
+├── memory_only_execution ← dll_sideloading + token_impersonation
+└── bootkit_persistence ← com_hijacking + memory_only_execution
 ```
 
 ## Merge Strategy Recommendations

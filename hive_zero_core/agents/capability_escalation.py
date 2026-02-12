@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 class CapabilityTier(Enum):
     """Capability tiers unlocked by merge count."""
     BASIC = 0           # 0 merges - individual agent
-    ENHANCED = 1        # 1-2 merges - duo/trio power
-    ADVANCED = 2        # 3-5 merges - squad tactics
-    ELITE = 3           # 6-10 merges - coordinated strike force
-    LEGENDARY = 4       # 11-20 merges - swarm intelligence
-    MYTHIC = 5          # 21+ merges - emergent superintelligence
+    ENHANCED = 1        # 1-2 merges - coordinated agents
+    ADVANCED = 2        # 3-5 merges - team tactics
+    ELITE = 3           # 6-10 merges - coordinated operations
+    EXPERT = 4          # 11-20 merges - advanced techniques
+    MASTER = 5          # 21+ merges - cutting-edge methods
 
 
 @dataclass
@@ -172,11 +172,11 @@ class CapabilityRegistry:
             synergy_bonus=1.8
         ))
 
-        # === TIER 4: LEGENDARY (Swarm Intelligence) ===
+        # === TIER 4: EXPERT (Advanced Techniques) ===
         self._register(Capability(
-            "shared_memory_pool",
-            "Distributed shared memory with eventual consistency",
-            CapabilityTier.LEGENDARY,
+            "process_hollowing",
+            "Process injection via PE image replacement in suspended processes",
+            CapabilityTier.EXPERT,
             power_multiplier=6.0,
             unlock_threshold=11,
             prerequisites=["consensus_protocol"],
@@ -184,59 +184,59 @@ class CapabilityRegistry:
         ))
 
         self._register(Capability(
-            "self_repair",
-            "Automatic rollback and redundancy for damaged components",
-            CapabilityTier.LEGENDARY,
+            "token_impersonation",
+            "Access token duplication and impersonation for privilege escalation",
+            CapabilityTier.EXPERT,
             power_multiplier=5.0,
             unlock_threshold=12,
             prerequisites=["behavior_learning"]
         ))
 
         self._register(Capability(
-            "kernel_exploitation",
-            "Privilege escalation through kernel-level vulnerabilities",
-            CapabilityTier.LEGENDARY,
+            "driver_exploitation",
+            "Vulnerable driver abuse for kernel-level access (e.g., signed drivers)",
+            CapabilityTier.EXPERT,
             power_multiplier=7.0,
             unlock_threshold=15,
             prerequisites=["vulnerability_chaining", "traffic_mimicry"]
         ))
 
         self._register(Capability(
-            "multi_architecture",
-            "Cross-platform code generation for x86, ARM, RISC-V",
-            CapabilityTier.LEGENDARY,
+            "dll_sideloading",
+            "DLL search order hijacking for code execution via legitimate binaries",
+            CapabilityTier.EXPERT,
             power_multiplier=6.5,
             unlock_threshold=14,
             synergy_bonus=2.5
         ))
 
-        # === TIER 5: MYTHIC (Superintelligence) ===
+        # === TIER 5: MASTER (Cutting-Edge Real Techniques) ===
         self._register(Capability(
-            "fuzzing_engine",
-            "Generative fuzzing with coverage-guided feedback",
-            CapabilityTier.MYTHIC,
+            "com_hijacking",
+            "COM object hijacking for persistence and privilege escalation",
+            CapabilityTier.MASTER,
             power_multiplier=10.0,
             unlock_threshold=21,
-            prerequisites=["shared_memory_pool", "kernel_exploitation"],
+            prerequisites=["process_hollowing", "driver_exploitation"],
             synergy_bonus=5.0
         ))
 
         self._register(Capability(
-            "hypervisor_escape",
-            "VM escape techniques targeting hypervisor vulnerabilities",
-            CapabilityTier.MYTHIC,
+            "memory_only_execution",
+            "Fileless execution with reflective DLL injection and in-memory PE loading",
+            CapabilityTier.MASTER,
             power_multiplier=12.0,
             unlock_threshold=25,
-            prerequisites=["multi_architecture", "self_repair"]
+            prerequisites=["dll_sideloading", "token_impersonation"]
         ))
 
         self._register(Capability(
-            "firmware_persistence",
-            "UEFI/BIOS level implant for persistent access",
-            CapabilityTier.MYTHIC,
+            "bootkit_persistence",
+            "MBR/VBR infection for pre-OS persistence (requires physical/admin access)",
+            CapabilityTier.MASTER,
             power_multiplier=15.0,
             unlock_threshold=30,
-            prerequisites=["fuzzing_engine", "hypervisor_escape"],
+            prerequisites=["com_hijacking", "memory_only_execution"],
             synergy_bonus=10.0
         ))
 
@@ -365,9 +365,9 @@ class CapabilityManager:
     def get_tier_for_merge_count(self, merge_count: int) -> CapabilityTier:
         """Determine capability tier based on merge count."""
         if merge_count >= 21:
-            return CapabilityTier.MYTHIC
+            return CapabilityTier.MASTER
         elif merge_count >= 11:
-            return CapabilityTier.LEGENDARY
+            return CapabilityTier.EXPERT
         elif merge_count >= 6:
             return CapabilityTier.ELITE
         elif merge_count >= 3:
@@ -445,27 +445,27 @@ class EmergentBehaviors:
         emergent = []
         cap_names = {cap.name for cap in capabilities}
 
-        # Network Effect: Appears when multiple distributed capabilities combine
-        distributed_caps = {'consensus_protocol', 'shared_memory_pool', 'distributed_coordination'}
+        # Coordinated Operations: Appears when multiple distributed capabilities combine
+        distributed_caps = {'consensus_protocol', 'process_hollowing', 'distributed_coordination'}
         if len(cap_names & distributed_caps) >= 2:
-            emergent.append("network_effect")
+            emergent.append("coordinated_operations")
 
-        # Advanced Persistence: Appears with high-level persistence + evasion
-        persistence_caps = {'timing_evasion', 'traffic_mimicry', 'kernel_exploitation'}
+        # Deep Persistence: Appears with system-level persistence + evasion
+        persistence_caps = {'timing_evasion', 'traffic_mimicry', 'driver_exploitation'}
         if len(cap_names & persistence_caps) >= 2:
-            emergent.append("advanced_persistence")
+            emergent.append("deep_persistence")
 
-        # Auto-Propagation: Appears with metamorphic + self-repair
-        if 'metamorphic_recompilation' in cap_names and 'self_repair' in cap_names:
-            emergent.append("auto_propagation")
+        # Living Off The Land: Appears with native tools + token abuse
+        if 'dll_sideloading' in cap_names and 'token_impersonation' in cap_names:
+            emergent.append("living_off_the_land")
 
-        # Full Spectrum Dominance: Appears with all top-tier capabilities
-        apex_caps = {'fuzzing_engine', 'hypervisor_escape', 'firmware_persistence'}
+        # Advanced Threat Actor: Appears with all master-tier capabilities
+        apex_caps = {'com_hijacking', 'memory_only_execution', 'bootkit_persistence'}
         if apex_caps.issubset(cap_names):
-            emergent.append("full_spectrum_dominance")
+            emergent.append("advanced_threat_actor")
 
-        # Critical Mass: Maximum capability density
+        # Full Arsenal: Maximum capability density
         if len(capabilities) >= 20:
-            emergent.append("critical_mass")
+            emergent.append("full_arsenal")
 
         return emergent
