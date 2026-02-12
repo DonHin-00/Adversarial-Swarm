@@ -2,10 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, List
 from hive_zero_core.agents.base_expert import BaseExpert
 import os
-import shutil
 
 class Agent_Mimic(BaseExpert):
     def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64):

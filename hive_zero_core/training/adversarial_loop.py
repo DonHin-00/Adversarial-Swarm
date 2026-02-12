@@ -1,8 +1,6 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import logging
-import numpy as np
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.training.rewards import CompositeReward
 from hive_zero_core.memory.replay_buffer import PrioritizedReplayBuffer

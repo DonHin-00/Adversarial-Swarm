@@ -1,8 +1,7 @@
 import torch
-import torch.nn as nn
 from transformers import GPT2LMHeadModel, GPT2Config
 from hive_zero_core.agents.base_expert import BaseExpert
-from typing import Optional, Dict
+from typing import Optional, Any
 
 class Agent_Chaos(BaseExpert):
     """

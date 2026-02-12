@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from typing import Tuple
 
 class LatentWorldModel(nn.Module):
@@ -47,7 +46,7 @@ class LatentWorldModel(nn.Module):
         """
         Simulate a trajectory in latent space.
         """
-        z = self.encoder(start_obs)
+        self.encoder(start_obs)
 
         for _ in range(horizon):
             pass

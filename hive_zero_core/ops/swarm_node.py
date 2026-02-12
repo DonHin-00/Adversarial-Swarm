@@ -1,7 +1,6 @@
 import grpc
 from concurrent import futures
 import logging
-import torch
 from hive_zero_core.utils import swarm_pb2, swarm_pb2_grpc
 
 class SwarmNode(swarm_pb2_grpc.SwarmServiceServicer):

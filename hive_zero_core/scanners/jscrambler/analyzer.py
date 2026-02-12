@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 class JscramblerAnalyzer:
     def __init__(self):

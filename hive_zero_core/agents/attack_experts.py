@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from typing import Optional, Dict, Tuple, List, Union, cast
+from typing import Optional, cast
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 from hive_zero_core.agents.base_expert import BaseExpert
 from hive_zero_core.knowledge.exploit_db import ExploitDB
@@ -119,7 +119,7 @@ class Agent_Mutator(BaseExpert):
         m = random.choice(self.mutations)
         try:
             return m(payload)
-        except:
+        except Exception:
             return payload
 
     def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:

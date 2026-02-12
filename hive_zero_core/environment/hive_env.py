@@ -1,8 +1,6 @@
 import gymnasium as gym
 from gymnasium import spaces
-import torch
 import numpy as np
-from typing import Dict, Any, List
 import logging
 
 class PenTestEnv(gym.Env):

@@ -1,4 +1,4 @@
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set
 import logging
 
 class Predicate:

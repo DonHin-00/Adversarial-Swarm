@@ -1,14 +1,13 @@
-from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, WebSocket, Request
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 from contextlib import asynccontextmanager
 import os
 import torch
 import uvicorn
 import asyncio
-import json
 from pathlib import Path
 from hive_zero_core.hive_mind import HiveMind
 from hive_zero_core.orchestration.strategic_planner import StrategicPlanner
@@ -131,14 +130,14 @@ async def websocket_monitor(websocket: WebSocket):
     try:
         while True:
             await websocket.receive_text()
-    except:
+    except Exception:
         active_websockets.remove(websocket)
 
 async def broadcast_status(data: Dict):
     for ws in active_websockets:
         try:
             await ws.send_json(data)
-        except:
+        except Exception:
             pass
 
 @app.get("/graph/viz", tags=["Visualization"], summary="Get Graph Data")

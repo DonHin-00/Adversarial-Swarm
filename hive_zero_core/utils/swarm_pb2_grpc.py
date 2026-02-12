@@ -3,7 +3,6 @@
 # To regenerate: python -m grpc_tools.protoc -I protos --python_out=hive_zero_core/utils --grpc_python_out=hive_zero_core/utils protos/swarm.proto
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
-import warnings
 
 from . import swarm_pb2 as swarm__pb2
 

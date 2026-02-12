@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Dict
-from transformers import ViTModel, AutoModelForCausalLM, AutoTokenizer
+from typing import Optional
+from transformers import ViTModel
 from hive_zero_core.agents.base_expert import BaseExpert
 from hive_zero_core.scanners.jscrambler.analyzer import JscramblerAnalyzer
 
@@ -14,8 +14,8 @@ class Agent_Vision(BaseExpert):
         try:
             self.backbone = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
             self.head = nn.Linear(self.backbone.config.hidden_size, action_dim)
-        except:
-            self.logger.warning("Failed to load ViT. Using dummy backbone.")
+        except Exception as exc:
+            self.logger.warning("Failed to load ViT. Using dummy backbone. Error: %s", exc)
             self.backbone = None
             self.dummy_layer = nn.Linear(3 * 224 * 224, action_dim)
 

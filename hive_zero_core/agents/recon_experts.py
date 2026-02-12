@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch_geometric.nn import HGTConv
 from torch_geometric.data import HeteroData
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, Union
 from hive_zero_core.agents.base_expert import BaseExpert
 from hive_zero_core.scanners.nmap_adapter import NmapAdapter
 from hive_zero_core.knowledge.mitre_kb import MitreKnowledgeBase

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch_geometric.data import HeteroData
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Any
 import ipaddress
 import hashlib
 
@@ -30,7 +30,7 @@ class HeteroLogEncoder(nn.Module):
             ip_int = int(ipaddress.IPv4Address(ip_str))
             bits = [float(x) for x in format(ip_int, '032b')]
             return torch.tensor(bits, dtype=torch.float32)
-        except:
+        except (ValueError, ipaddress.AddressValueError):
             return torch.zeros(32, dtype=torch.float32)
 
     def update(self, logs: List[Dict], mitre_context: Optional[List[Dict]] = None) -> HeteroData:
