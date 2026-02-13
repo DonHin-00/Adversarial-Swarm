@@ -20,7 +20,7 @@ jobs:
     # Only run if the secret is configured
     if: ${{ secrets.NEURALEGION_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Start Nexploit Scan
         id: start
