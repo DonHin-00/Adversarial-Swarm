@@ -3,13 +3,13 @@
 # separate terms of service, privacy policy, and support documentation.
 # More information: https://www.neuralegion.com/
 
-name: "NeuraLegion"
+name: NeuraLegion
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   schedule:
     - cron: '39 2 * * 6'
 
