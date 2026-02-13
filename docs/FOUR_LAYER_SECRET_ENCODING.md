@@ -142,8 +142,8 @@ result = encoder.encode(secret)
 #         "original_length": 25,
 #         "xor_key": "base64_encoded_key",
 #         "aes_nonce": "base64_encoded_nonce",
-#         "hmac": "base64_encoded_signature",
-#         "checksum": "sha256_hex_digest"
+#         "hmac": "base64_encoded_signature"
+#         # Note: No checksum - would expose hash of plaintext (security risk)
 #     }
 # }
 
@@ -255,10 +255,11 @@ All encoded secrets include comprehensive metadata:
   "original_length": 25,
   "xor_key": "y4CiDbTxv2J2ZJ5lDun5iubmyS7+pVQTUoHZuo048JU=",
   "aes_nonce": "AbCd1234EfGh5678",
-  "hmac": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-  "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  "hmac": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 }
 ```
+
+**Security Note**: Checksum field removed to prevent hash exposure of plaintext secret. HMAC and AES-GCM already provide integrity verification.
 
 ### Metadata Fields
 
@@ -269,7 +270,6 @@ All encoded secrets include comprehensive metadata:
 - **xor_key**: Base64-encoded XOR key (Layer 1)
 - **aes_nonce**: Base64-encoded AES nonce (Layer 3)
 - **hmac**: Base64-encoded HMAC signature (Layer 4)
-- **checksum**: SHA-256 checksum of original secret
 
 ## Error Handling
 
@@ -297,9 +297,9 @@ decoder.decode(tampered_data, metadata)
 decoder2.decode(encoded, metadata)  
 # raises ValueError: HMAC verification failed
 
-# Corrupted data
+# Corrupted data - detected by HMAC or AES-GCM authentication
 decoder.decode(corrupted, metadata)  
-# raises ValueError: Checksum mismatch
+# raises ValueError: HMAC verification failed
 ```
 
 ## Best Practices

@@ -111,14 +111,14 @@ class TestSecretEncoder:
         assert "layers" in metadata
         assert "timestamp" in metadata
         assert "original_length" in metadata
-        assert "checksum" in metadata
+        # Note: No checksum field - would be security vulnerability
         assert "hmac" in metadata
         assert "xor_key" in metadata
 
         # Verify values
         assert metadata["version"] == "1.0"
         assert metadata["original_length"] == len(secret)
-        assert metadata["checksum"] == hashlib.sha256(secret).hexdigest()
+        # Checksum removed - HMAC provides integrity verification
 
     def test_tampered_data_detection(self):
         """Test that tampering with encoded data is detected."""
@@ -180,16 +180,17 @@ class TestSecretEncoder:
         with pytest.raises(TypeError, match="Secret must be bytes"):
             encoder.encode("not_bytes")
 
-    def test_checksum_verification(self):
-        """Test that checksum is properly verified during decode."""
+    def test_integrity_verification(self):
+        """Test that HMAC provides integrity verification (no checksum needed)."""
         encoder = SecretEncoder()
         secret = b"test_secret"
 
         result = encoder.encode(secret)
 
-        # Verify checksum in metadata
-        expected_checksum = hashlib.sha256(secret).hexdigest()
-        assert result["metadata"]["checksum"] == expected_checksum
+        # Verify HMAC is present (provides integrity, no checksum needed)
+        assert "hmac" in result["metadata"]
+        # Checksum removed to prevent security vulnerability
+        assert "checksum" not in result["metadata"]
 
     def test_rotation_with_different_xor_keys(self):
         """Test that each encoding uses a different XOR key."""

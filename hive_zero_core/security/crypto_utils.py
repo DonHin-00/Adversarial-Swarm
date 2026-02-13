@@ -255,8 +255,8 @@ class SecretEncoder:
             else:
                 metadata["layers"].append("aes-gcm-skipped")
 
-            # Compute final checksum of original secret (before HMAC)
-            metadata["checksum"] = hashlib.sha256(secret).hexdigest()
+            # Note: No checksum field - HMAC and AES-GCM provide integrity verification
+            # Adding a checksum of the plaintext secret would be a security vulnerability
 
             # Layer 4: HMAC-SHA256 authentication
             signature = self._layer4_hmac(encoded, metadata, sign=True)
@@ -319,11 +319,8 @@ class SecretEncoder:
                 xor_key = base64.b64decode(metadata["xor_key"])
                 decoded = self._layer1_xor(decoded, xor_key)
 
-            # Verify checksum of original secret
-            if "checksum" in metadata:
-                actual_checksum = hashlib.sha256(decoded).hexdigest()
-                if actual_checksum != metadata["checksum"]:
-                    raise ValueError("Checksum mismatch - decoded secret is corrupted")
+            # Note: No checksum verification - HMAC and AES-GCM already provide integrity
+            # Checksum of plaintext would be a security vulnerability
 
             # Verify length
             if "original_length" in metadata:
