@@ -233,7 +233,7 @@ class SecretEncoder:
             metadata = {
                 "version": "1.0",
                 "layers": [],
-                "timestamp": datetime.now(datetime.UTC).isoformat() if hasattr(datetime, 'UTC') else datetime.utcnow().isoformat(),
+                "timestamp": datetime.now().astimezone().isoformat(),
                 "original_length": len(secret),
             }
 
