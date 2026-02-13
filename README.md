@@ -3,7 +3,7 @@
 [![Python CI](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/python-ci.yml/badge.svg)](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/python-ci.yml)
 [![Security Scan](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/security-scan.yml/badge.svg)](https://github.com/DonHin-00/Adversarial-Swarm/actions/workflows/security-scan.yml)
 
-A Hierarchical Multi-Agent Reinforcement Learning (H-MARL) system implementing adversarial swarm intelligence for network security research.
+HIVE-ZERO: Hierarchical Multi-Agent Reinforcement Learning system with adversarial swarm intelligence for network security research.
 
 ## Architecture
 
