@@ -255,8 +255,8 @@ class SecretEncoder:
             else:
                 metadata["layers"].append("aes-gcm-skipped")
 
-            # Compute final checksum of protected data (before HMAC)
-            metadata["checksum"] = hashlib.sha256(encoded).hexdigest()
+            # Compute final checksum of original secret (before HMAC)
+            metadata["checksum"] = hashlib.sha256(secret).hexdigest()
 
             # Layer 4: HMAC-SHA256 authentication
             signature = self._layer4_hmac(encoded, metadata, sign=True)
