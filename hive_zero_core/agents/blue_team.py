@@ -32,10 +32,10 @@ import torch.nn.functional as F
 from typing import Optional
 from hive_zero_core.agents.base_expert import BaseExpert
 
-
 # ---------------------------------------------------------------------------
 # Agent_WAF — Adversarial Web Application Firewall
 # ---------------------------------------------------------------------------
+
 
 class Agent_WAF(BaseExpert):
     """
@@ -51,9 +51,14 @@ class Agent_WAF(BaseExpert):
     WAF continuously adapts to novel attack patterns.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int = 2,
-                 hidden_dim: int = 128, num_signatures: int = 64,
-                 ema_decay: float = 0.99):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int = 2,
+        hidden_dim: int = 128,
+        num_signatures: int = 64,
+        ema_decay: float = 0.99,
+    ):
         super().__init__(observation_dim, action_dim, name="WAF", hidden_dim=hidden_dim)
 
         self.num_signatures = num_signatures
@@ -85,8 +90,9 @@ class Agent_WAF(BaseExpert):
         # Rule-stack: lightweight per-rule scoring
         self.rule_weights = nn.Parameter(torch.ones(num_signatures) / num_signatures)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Args:
             x: Payload embedding [batch, observation_dim].
@@ -139,16 +145,16 @@ class Agent_WAF(BaseExpert):
         # For each unique signature index, average assigned features and apply EMA
         for idx in best_idx.unique():
             assigned = features[best_idx == idx]  # [K, H]
-            mean_feature = assigned.mean(dim=0)   # [H]
+            mean_feature = assigned.mean(dim=0)  # [H]
             self.signature_bank[idx] = (
-                self.ema_decay * self.signature_bank[idx]
-                + (1 - self.ema_decay) * mean_feature
+                self.ema_decay * self.signature_bank[idx] + (1 - self.ema_decay) * mean_feature
             )
 
 
 # ---------------------------------------------------------------------------
 # Agent_EDR — Endpoint Detection & Response
 # ---------------------------------------------------------------------------
+
 
 class Agent_EDR(BaseExpert):
     """
@@ -159,16 +165,26 @@ class Agent_EDR(BaseExpert):
     positional embeddings and a binary anomaly head.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int = 2,
-                 hidden_dim: int = 128, nhead: int = 4, num_layers: int = 2):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int = 2,
+        hidden_dim: int = 128,
+        nhead: int = 4,
+        num_layers: int = 2,
+    ):
         super().__init__(observation_dim, action_dim, name="EDR", hidden_dim=hidden_dim)
 
         self.input_proj = nn.Linear(observation_dim, hidden_dim)
         self.pos_embed = nn.Parameter(torch.randn(1, 512, hidden_dim) * 0.02)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_dim, nhead=nhead, dim_feedforward=hidden_dim * 4,
-            dropout=0.1, batch_first=True, activation="gelu",
+            d_model=hidden_dim,
+            nhead=nhead,
+            dim_feedforward=hidden_dim * 4,
+            dropout=0.1,
+            batch_first=True,
+            activation="gelu",
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.norm = nn.LayerNorm(hidden_dim)
@@ -180,8 +196,9 @@ class Agent_EDR(BaseExpert):
             nn.Linear(hidden_dim // 2, action_dim),
         )
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         if x.dim() == 2:
             x = x.unsqueeze(1)  # [B, D] → [B, 1, D]
 
@@ -199,6 +216,7 @@ class Agent_EDR(BaseExpert):
 # Agent_SIEM — Security Information & Event Management
 # ---------------------------------------------------------------------------
 
+
 class Agent_SIEM(BaseExpert):
     """
     Multi-source log correlator and aggregate threat scorer.
@@ -209,9 +227,14 @@ class Agent_SIEM(BaseExpert):
     of known multi-stage attack patterns (e.g. scan→exploit→exfil).
     """
 
-    def __init__(self, observation_dim: int, action_dim: int = 2,
-                 hidden_dim: int = 128, num_alert_prototypes: int = 16,
-                 nhead: int = 4):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int = 2,
+        hidden_dim: int = 128,
+        num_alert_prototypes: int = 16,
+        nhead: int = 4,
+    ):
         super().__init__(observation_dim, action_dim, name="SIEM", hidden_dim=hidden_dim)
 
         self.num_prototypes = num_alert_prototypes
@@ -233,8 +256,9 @@ class Agent_SIEM(BaseExpert):
             nn.Linear(hidden_dim // 2, action_dim),
         )
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         batch = x.size(0)
 
         # Project observation as query
@@ -254,6 +278,7 @@ class Agent_SIEM(BaseExpert):
 # Agent_IDS — Intrusion Detection System
 # ---------------------------------------------------------------------------
 
+
 class Agent_IDS(BaseExpert):
     """
     Deep-Packet Inspection IDS using 1-D convolutions.
@@ -263,8 +288,13 @@ class Agent_IDS(BaseExpert):
     n-gram-like features, then classifies via a pooled representation.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int = 2,
-                 hidden_dim: int = 128, num_filters: int = 64):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int = 2,
+        hidden_dim: int = 128,
+        num_filters: int = 64,
+    ):
         super().__init__(observation_dim, action_dim, name="IDS", hidden_dim=hidden_dim)
 
         # Multi-scale 1-D convolutions
@@ -280,8 +310,9 @@ class Agent_IDS(BaseExpert):
             nn.Linear(hidden_dim, action_dim),
         )
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         # x: [B, D] → [B, 1, D] for Conv1d
         x_1d = x.unsqueeze(1)
 

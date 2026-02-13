@@ -69,9 +69,14 @@ class ThreatIntelDB(nn.Module):
         enough to enter the bank (prevents mode collapse).
     """
 
-    def __init__(self, embedding_dim: int = 128, bank_size: int = 256,
-                 ema_decay: float = 0.995, novelty_threshold: float = 0.1,
-                 novelty_warmup_gens: int = 50):
+    def __init__(
+        self,
+        embedding_dim: int = 128,
+        bank_size: int = 256,
+        ema_decay: float = 0.995,
+        novelty_threshold: float = 0.1,
+        novelty_warmup_gens: int = 50,
+    ):
         super().__init__()
 
         self.embedding_dim = embedding_dim
@@ -119,8 +124,7 @@ class ThreatIntelDB(nn.Module):
         Args:
             embeddings: [N, embedding_dim] — successful payload embeddings.
         """
-        self._ingest(embeddings, self.attack_bank, self.attack_count,
-                     self._attack_ptr)
+        self._ingest(embeddings, self.attack_bank, self.attack_count, self._attack_ptr)
 
     @torch.no_grad()
     def record_attack_failure(self, embeddings: torch.Tensor):
@@ -130,8 +134,7 @@ class ThreatIntelDB(nn.Module):
         Args:
             embeddings: [N, embedding_dim] — failed payload embeddings.
         """
-        self._ingest(embeddings, self.defense_bank, self.defense_count,
-                     self._defense_ptr)
+        self._ingest(embeddings, self.defense_bank, self.defense_count, self._defense_ptr)
 
     @torch.no_grad()
     def step_generation(self, evasion_rate: float):
@@ -150,8 +153,9 @@ class ThreatIntelDB(nn.Module):
     # Querying
     # ------------------------------------------------------------------
 
-    def query_attack_bank(self, query: torch.Tensor,
-                          top_k: int = 5) -> Tuple[torch.Tensor, torch.Tensor]:
+    def query_attack_bank(
+        self, query: torch.Tensor, top_k: int = 5
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Retrieve the *top_k* most similar signatures from the attack bank.
 
@@ -164,8 +168,9 @@ class ThreatIntelDB(nn.Module):
         """
         return self._query(query, self.attack_bank, top_k)
 
-    def query_defense_bank(self, query: torch.Tensor,
-                           top_k: int = 5) -> Tuple[torch.Tensor, torch.Tensor]:
+    def query_defense_bank(
+        self, query: torch.Tensor, top_k: int = 5
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Retrieve the *top_k* most similar signatures from the defence bank.
         """
@@ -221,8 +226,9 @@ class ThreatIntelDB(nn.Module):
         alpha = gen / max(self.novelty_warmup_gens, 1)
         return 1.0 * (1 - alpha) + self.novelty_threshold * alpha
 
-    def _ingest(self, embeddings: torch.Tensor, bank: torch.Tensor,
-                count: torch.Tensor, ptr: torch.Tensor):
+    def _ingest(
+        self, embeddings: torch.Tensor, bank: torch.Tensor, count: torch.Tensor, ptr: torch.Tensor
+    ):
         """Insert or EMA-update signatures in the given bank.
 
         Normalises the bank once up-front (and re-normalises only the
@@ -246,10 +252,7 @@ class ThreatIntelDB(nn.Module):
 
             if max_sim.item() > (1.0 - threshold):
                 # Close match exists → EMA update
-                bank[max_idx] = (
-                    self.ema_decay * bank[max_idx]
-                    + (1 - self.ema_decay) * emb
-                )
+                bank[max_idx] = self.ema_decay * bank[max_idx] + (1 - self.ema_decay) * emb
                 count[max_idx] += 1
                 # Re-normalise only the updated row
                 bank_norm[max_idx] = F.normalize(bank[max_idx].unsqueeze(0), dim=-1).squeeze(0)
@@ -262,13 +265,14 @@ class ThreatIntelDB(nn.Module):
                 # Re-normalise only the new row
                 bank_norm[idx] = F.normalize(bank[idx].unsqueeze(0), dim=-1).squeeze(0)
 
-    def _query(self, query: torch.Tensor, bank: torch.Tensor,
-               top_k: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _query(
+        self, query: torch.Tensor, bank: torch.Tensor, top_k: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Cosine-similarity kNN against a bank."""
-        q_norm = F.normalize(query, dim=-1)       # [B, D]
-        b_norm = F.normalize(bank, dim=-1)         # [S, D]
+        q_norm = F.normalize(query, dim=-1)  # [B, D]
+        b_norm = F.normalize(bank, dim=-1)  # [S, D]
 
-        sim = torch.matmul(q_norm, b_norm.t())     # [B, S]
+        sim = torch.matmul(q_norm, b_norm.t())  # [B, S]
         effective_k = max(1, min(top_k, bank.size(0)))
         top_sim, top_idx = torch.topk(sim, k=effective_k, dim=-1)
 

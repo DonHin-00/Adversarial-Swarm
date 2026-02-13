@@ -11,7 +11,11 @@ from hive_zero_core.agents.recon_experts import Agent_Cartographer, Agent_DeepSc
 from hive_zero_core.agents.attack_experts import Agent_Sentinel, Agent_PayloadGen, Agent_Mutator
 from hive_zero_core.agents.post_experts import Agent_Mimic, Agent_Ghost, Agent_Stego, Agent_Cleaner
 from hive_zero_core.agents.defense_experts import Agent_Tarpit
-from hive_zero_core.agents.offensive_defense import Agent_FeedbackLoop, Agent_Flashbang, Agent_GlassHouse
+from hive_zero_core.agents.offensive_defense import (
+    Agent_FeedbackLoop,
+    Agent_Flashbang,
+    Agent_GlassHouse,
+)
 from hive_zero_core.agents.blue_team import Agent_WAF, Agent_EDR, Agent_SIEM, Agent_IDS
 from hive_zero_core.agents.red_booster import Agent_PreAttackBooster
 
@@ -26,8 +30,9 @@ class GatingNetwork(nn.Module):
     loss penalises routing collapse onto a single expert.
     """
 
-    def __init__(self, input_dim: int, num_experts: int, hidden_dim: int = 64,
-                 noise_std: float = 0.1):
+    def __init__(
+        self, input_dim: int, num_experts: int, hidden_dim: int = 64, noise_std: float = 0.1
+    ):
         super().__init__()
         self.num_experts = num_experts
         self.noise_std = noise_std
@@ -36,7 +41,7 @@ class GatingNetwork(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(p=0.05),
-            nn.Linear(hidden_dim, num_experts)
+            nn.Linear(hidden_dim, num_experts),
         )
 
         # Running estimate of expert utilisation for load balancing
@@ -132,9 +137,10 @@ class HiveMind(nn.Module):
         self.expert_sentinel = Agent_Sentinel(observation_dim, action_dim=2)
         self.expert_payloadgen = Agent_PayloadGen(observation_dim, action_dim=128)
         self.expert_mutator = Agent_Mutator(
-            observation_dim, action_dim=128,
+            observation_dim,
+            action_dim=128,
             sentinel_expert=self.expert_sentinel,
-            generator_expert=self.expert_payloadgen
+            generator_expert=self.expert_payloadgen,
         )
 
         # Cluster C: Post-Exploit
@@ -158,42 +164,58 @@ class HiveMind(nn.Module):
         self.expert_ids = Agent_IDS(observation_dim, action_dim=2)
 
         # Cluster G: Red Team Pre-Attack Booster
-        self.expert_booster = Agent_PreAttackBooster(
-            observation_dim, action_dim=observation_dim
-        )
+        self.expert_booster = Agent_PreAttackBooster(observation_dim, action_dim=observation_dim)
         # Wire the booster to the blue team so it can adversarially refine
-        self.expert_booster.register_blue_team([
-            self.expert_waf, self.expert_edr, self.expert_siem, self.expert_ids,
-        ])
+        self.expert_booster.register_blue_team(
+            [
+                self.expert_waf,
+                self.expert_edr,
+                self.expert_siem,
+                self.expert_ids,
+            ]
+        )
 
         # Order matters for indexing in GatingNetwork outputs
-        self.experts = nn.ModuleList([
-            self.expert_cartographer,  # 0   Recon
-            self.expert_deepscope,     # 1   Recon
-            self.expert_chronos,       # 2   Recon
-            self.expert_payloadgen,    # 3   Attack
-            self.expert_mutator,       # 4   Attack
-            self.expert_sentinel,      # 5   Attack
-            self.expert_mimic,         # 6   Post-Exploit
-            self.expert_ghost,         # 7   Post-Exploit
-            self.expert_stego,         # 8   Post-Exploit
-            self.expert_cleaner,       # 9   Post-Exploit
-            self.expert_tarpit,        # 10  Active Defense
-            self.expert_feedback,      # 11  Kill Chain
-            self.expert_flashbang,     # 12  Kill Chain
-            self.expert_glasshouse,    # 13  Kill Chain
-            self.expert_waf,           # 14  Blue Team
-            self.expert_edr,           # 15  Blue Team
-            self.expert_siem,          # 16  Blue Team
-            self.expert_ids,           # 17  Blue Team
-            self.expert_booster,       # 18  Red Booster
-        ])
+        self.experts = nn.ModuleList(
+            [
+                self.expert_cartographer,  # 0   Recon
+                self.expert_deepscope,  # 1   Recon
+                self.expert_chronos,  # 2   Recon
+                self.expert_payloadgen,  # 3   Attack
+                self.expert_mutator,  # 4   Attack
+                self.expert_sentinel,  # 5   Attack
+                self.expert_mimic,  # 6   Post-Exploit
+                self.expert_ghost,  # 7   Post-Exploit
+                self.expert_stego,  # 8   Post-Exploit
+                self.expert_cleaner,  # 9   Post-Exploit
+                self.expert_tarpit,  # 10  Active Defense
+                self.expert_feedback,  # 11  Kill Chain
+                self.expert_flashbang,  # 12  Kill Chain
+                self.expert_glasshouse,  # 13  Kill Chain
+                self.expert_waf,  # 14  Blue Team
+                self.expert_edr,  # 15  Blue Team
+                self.expert_siem,  # 16  Blue Team
+                self.expert_ids,  # 17  Blue Team
+                self.expert_booster,  # 18  Red Booster
+            ]
+        )
 
         # Validate expert ordering at initialization to fail fast if order changes
         expected_names = [
-            "Cartographer", "DeepScope", "Chronos", "PayloadGen", "Mutator",
-            "Sentinel", "Mimic", "Ghost", "Stego", "Cleaner",
-            "Tarpit", "FeedbackLoop", "Flashbang", "GlassHouse"
+            "Cartographer",
+            "DeepScope",
+            "Chronos",
+            "PayloadGen",
+            "Mutator",
+            "Sentinel",
+            "Mimic",
+            "Ghost",
+            "Stego",
+            "Cleaner",
+            "Tarpit",
+            "FeedbackLoop",
+            "Flashbang",
+            "GlassHouse",
         ]
         if len(self.experts) != len(expected_names):
             raise ValueError(
@@ -248,13 +270,6 @@ class HiveMind(nn.Module):
         if not isinstance(raw_logs, list):
             raise TypeError(f"raw_logs must be a list, got {type(raw_logs)}")
 
-        if data.x.size(0) > 0:
-            global_state = torch.mean(data.x, dim=0, keepdim=True)
-        else:
-            # Create fallback global_state on the correct device and dtype
-            device = next(self.parameters()).device
-            dtype = next(self.parameters()).dtype
-            global_state = torch.zeros(1, self.observation_dim, device=device, dtype=dtype)
         data = self.log_encoder.update(raw_logs)
         global_state = self.compute_global_state(data)
 
@@ -268,9 +283,7 @@ class HiveMind(nn.Module):
 
         # SYNERGY LOGIC: Force-Enable Kill Chain using name-based lookup
         # instead of hardcoded indices to prevent breakage if expert order changes
-        tarpit_active = any(
-            self.experts[idx].name == "Tarpit" for idx in active_indices
-        )
+        tarpit_active = any(self.experts[idx].name == "Tarpit" for idx in active_indices)
         if tarpit_active:
             synergy_names = {"FeedbackLoop", "Flashbang", "GlassHouse"}
             for i, expert in enumerate(self.experts):
@@ -299,7 +312,9 @@ class HiveMind(nn.Module):
                     results["constraints"] = out
 
                 elif idx == 2:  # Chronos
-                    dummy_times = torch.randn(1, 10, device=global_state.device, dtype=global_state.dtype)
+                    dummy_times = torch.randn(
+                        1, 10, device=global_state.device, dtype=global_state.dtype
+                    )
                     out = expert(dummy_times)
                 elif expert.name == "Chronos":
                     # Extract inter-arrival times from log encoder
@@ -328,7 +343,12 @@ class HiveMind(nn.Module):
                     results["hiding_spot"] = out
 
                 elif idx == 8:  # Stego
-                    dummy_data = torch.rand(1, self.observation_dim, device=global_state.device, dtype=global_state.dtype)
+                    dummy_data = torch.rand(
+                        1,
+                        self.observation_dim,
+                        device=global_state.device,
+                        dtype=global_state.dtype,
+                    )
                     out = expert(dummy_data)
                 elif expert.name == "Stego":
                     # Use global state for steganographic embedding
@@ -414,16 +434,13 @@ class HiveMind(nn.Module):
         # Determine the best available payload embedding
         payload = results.get(
             "hardened_payload",
-            results.get("optimized_payload",
-                        results.get("raw_payload")),
+            results.get("optimized_payload", results.get("raw_payload")),
         )
         if payload is None:
             return
 
         payload_flat = payload.view(payload.size(0), -1)
-        payload_flat = self.expert_booster.ensure_dimension(
-            payload_flat, self.observation_dim
-        )
+        payload_flat = self.expert_booster.ensure_dimension(payload_flat, self.observation_dim)
 
         # Aggregate blue-team verdicts (P(Blocked) from each detector)
         blue_keys = ("waf_verdict", "edr_verdict", "siem_verdict", "ids_verdict")

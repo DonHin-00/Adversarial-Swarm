@@ -18,21 +18,24 @@ class Agent_FeedbackLoop(BaseExpert):
     are reflected back effectively.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128,
-                 num_scales: int = 3):
+    def __init__(
+        self, observation_dim: int, action_dim: int, hidden_dim: int = 128, num_scales: int = 3
+    ):
         super().__init__(observation_dim, action_dim, name="FeedbackLoop", hidden_dim=hidden_dim)
         self.num_scales = num_scales
 
         # Per-scale amplifier branches
-        self.scale_nets = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(observation_dim, hidden_dim),
-                nn.LayerNorm(hidden_dim),
-                nn.Tanh(),
-                nn.Linear(hidden_dim, action_dim),
-            )
-            for _ in range(num_scales)
-        ])
+        self.scale_nets = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(observation_dim, hidden_dim),
+                    nn.LayerNorm(hidden_dim),
+                    nn.Tanh(),
+                    nn.Linear(hidden_dim, action_dim),
+                )
+                for _ in range(num_scales)
+            ]
+        )
 
         # Learnable per-scale gain (initialised to increasing magnitude)
         self.gains = nn.Parameter(torch.linspace(1.0, 10.0, num_scales))
@@ -41,8 +44,9 @@ class Agent_FeedbackLoop(BaseExpert):
         self.fusion = nn.Linear(action_dim * num_scales, action_dim)
         self.norm = nn.LayerNorm(action_dim)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         branches = []
         for i, net in enumerate(self.scale_nets):
             amp = net(x)
@@ -79,8 +83,9 @@ class Agent_Flashbang(BaseExpert):
             nn.Softplus(),  # Ensures positive intensity
         )
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         expanded = F.relu(self.norm(self.expander(x)))
 
         # Context-adaptive noise intensity instead of fixed 100×
@@ -136,8 +141,9 @@ class Agent_GlassHouse(BaseExpert):
         )
         self.beacon_scale = nn.Parameter(torch.ones(1))
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         # Phase 1: Break Walls
         broken = F.leaky_relu(self.breaker(x), negative_slope=0.2)
 
@@ -150,8 +156,6 @@ class Agent_GlassHouse(BaseExpert):
         shout = self.beacon(broken) * self.beacon_scale * torch.randn_like(real_ports)
 
         # Fusion: |Z| = sqrt(Re² + Im²)
-        total_exposure = torch.sqrt(
-            torch.pow(real_ports, 2) + torch.pow(imag_ports, 2) + 1e-6
-        )
+        total_exposure = torch.sqrt(torch.pow(real_ports, 2) + torch.pow(imag_ports, 2) + 1e-6)
 
         return total_exposure + shout

@@ -14,8 +14,13 @@ class CompositeReward:
         w_temporal: Weight for temporal-efficiency reward.
     """
 
-    def __init__(self, w_adv: float = 1.0, w_info: float = 0.5,
-                 w_stealth: float = 0.8, w_temporal: float = 0.3):
+    def __init__(
+        self,
+        w_adv: float = 1.0,
+        w_info: float = 0.5,
+        w_stealth: float = 0.8,
+        w_temporal: float = 0.3,
+    ):
         self.w_adv = w_adv
         self.w_info = w_info
         self.w_stealth = w_stealth
@@ -39,8 +44,9 @@ class CompositeReward:
         gain = prev_entropy - current_entropy
         return max(0.0, gain)
 
-    def calculate_stealth_reward(self, traffic_dist: torch.Tensor,
-                                 baseline_dist: torch.Tensor) -> torch.Tensor:
+    def calculate_stealth_reward(
+        self, traffic_dist: torch.Tensor, baseline_dist: torch.Tensor
+    ) -> torch.Tensor:
         """
         R_stealth = −KL(traffic ‖ baseline).
 
@@ -49,8 +55,7 @@ class CompositeReward:
         log to prevent NaN/Inf.
         """
         if traffic_dist.shape != baseline_dist.shape:
-            return torch.tensor(0.0, device=traffic_dist.device,
-                                dtype=traffic_dist.dtype)
+            return torch.tensor(0.0, device=traffic_dist.device, dtype=traffic_dist.dtype)
 
         # Clamp, then normalise to valid probability distributions so that
         # KL(P||Q) is well-defined even for un-normalised inputs.
@@ -61,11 +66,10 @@ class CompositeReward:
         baseline_norm = baseline_clamped / baseline_clamped.sum(dim=-1, keepdim=True)
 
         traffic_log = torch.log(traffic_norm)
-        kl = F.kl_div(traffic_log, baseline_norm, reduction='batchmean')
+        kl = F.kl_div(traffic_log, baseline_norm, reduction="batchmean")
         return -kl
 
-    def calculate_temporal_reward(self, elapsed_steps: int,
-                                  budget: int = 100) -> float:
+    def calculate_temporal_reward(self, elapsed_steps: int, budget: int = 100) -> float:
         """
         R_temporal: rewards faster completion.
 
@@ -78,9 +82,15 @@ class CompositeReward:
     # Composite
     # ------------------------------------------------------------------
 
-    def compute(self, adv_score: torch.Tensor, info_gain: float,
-                traffic_dist: torch.Tensor, baseline_dist: torch.Tensor,
-                elapsed_steps: int = 0, step_budget: int = 100) -> torch.Tensor:
+    def compute(
+        self,
+        adv_score: torch.Tensor,
+        info_gain: float,
+        traffic_dist: torch.Tensor,
+        baseline_dist: torch.Tensor,
+        elapsed_steps: int = 0,
+        step_budget: int = 100,
+    ) -> torch.Tensor:
         """Weighted sum of all reward components.
 
         Converts scalar float rewards to tensors on the same device as

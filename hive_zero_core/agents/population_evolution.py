@@ -6,18 +6,17 @@ and multi-generational evolution for payload and code optimization.
 """
 
 import logging
-from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
-from hive_zero_core.security.audit_logger import SecurityEvent
-from hive_zero_core.security.access_control import OperationType
+from hive_zero_core.security import SecureRandom
 
-import random
 from typing import List, Optional, Callable, Dict
 import numpy as np
 
 from hive_zero_core.agents.genetic_operators import (
-    Individual, FitnessFunction, GeneticOperators, SelectionStrategies
+    Individual,
+    FitnessFunction,
+    GeneticOperators,
+    SelectionStrategies,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +27,15 @@ class PopulationManager:
     Implements full genetic algorithm with crossover, mutation, and selection.
     """
 
-    def __init__(self,
-                 population_size: int = 20,
-                 elite_size: int = 2,
-                 mutation_rate: float = 0.3,
-                 crossover_rate: float = 0.7,
-                 max_generations: int = 50,
-                 fitness_weights: Optional[dict] = None):
+    def __init__(
+        self,
+        population_size: int = 20,
+        elite_size: int = 2,
+        mutation_rate: float = 0.3,
+        crossover_rate: float = 0.7,
+        max_generations: int = 50,
+        fitness_weights: Optional[dict] = None,
+    ):
         """
         Initialize population manager.
 
@@ -49,7 +50,7 @@ class PopulationManager:
         if population_size < 4:
             raise ValueError(f"population_size must be >= 4, got {population_size}")
         if elite_size >= population_size:
-            raise ValueError(f"elite_size must be < population_size")
+            raise ValueError("elite_size must be < population_size")
         if not 0.0 <= mutation_rate <= 1.0:
             raise ValueError(f"mutation_rate must be in [0,1], got {mutation_rate}")
         if not 0.0 <= crossover_rate <= 1.0:
@@ -93,8 +94,7 @@ class PopulationManager:
             "# noqa",
         ]
 
-    def initialize_population(self, seed_genome: str,
-                            validator: Callable[[str], bool]) -> None:
+    def initialize_population(self, seed_genome: str, validator: Callable[[str], bool]) -> None:
         """
         Initialize population from seed genome.
 
@@ -124,7 +124,7 @@ class PopulationManager:
 
             try:
                 # Mutate seed with varying mutation rates
-                varied_rate = (SecureRandom.random_float() * (0.8 - (0.2)) + (0.2))
+                varied_rate = SecureRandom.random_float() * (0.8 - (0.2)) + (0.2)
                 mutated_genome = engine.mutate_code(seed_genome, gene_seed, varied_rate)
 
                 if validator(mutated_genome):
@@ -142,7 +142,7 @@ class PopulationManager:
         # Fill remaining slots with random variations if needed
         while len(self.population) < self.population_size:
             # Add slight variations
-            base = SecureRandom.random_choice(self.population[:len(self.population)//2 + 1])
+            base = SecureRandom.random_choice(self.population[: len(self.population) // 2 + 1])
             individual = Individual(base.genome + f"\n# GEN_0_{len(self.population)}", 0.0, 0)
             if validator(individual.genome):
                 individual.fitness = self.fitness_function.evaluate(
@@ -158,8 +158,9 @@ class PopulationManager:
         logger.info(f"Initialized population of {len(self.population)} individuals")
         logger.info(f"Best initial fitness: {self.best_individual.fitness:.3f}")
 
-    def evolve(self, seed_genome: str, validator: Callable[[str], bool],
-              generations: Optional[int] = None) -> Individual:
+    def evolve(
+        self, seed_genome: str, validator: Callable[[str], bool], generations: Optional[int] = None
+    ) -> Individual:
         """
         Evolve population over multiple generations.
 
@@ -190,7 +191,9 @@ class PopulationManager:
             if current_best.fitness > self.best_individual.fitness:
                 self.best_individual = current_best
                 self.stagnation_counter = 0
-                logger.info(f"Gen {self.current_generation}: New best fitness {current_best.fitness:.3f}")
+                logger.info(
+                    f"Gen {self.current_generation}: New best fitness {current_best.fitness:.3f}"
+                )
             else:
                 self.stagnation_counter += 1
 
@@ -209,15 +212,17 @@ class PopulationManager:
         logger.info(f"Evolution complete. Best fitness: {self.best_individual.fitness:.3f}")
         return self.best_individual
 
-    def _create_next_generation(self, seed_genome: str,
-                               validator: Callable[[str], bool]) -> List[Individual]:
+    def _create_next_generation(
+        self, seed_genome: str, validator: Callable[[str], bool]
+    ) -> List[Individual]:
         """Create next generation through selection, crossover, and mutation."""
         next_gen = []
 
         # Elitism: preserve best individuals
         elites = self.selection.elitism_selection(self.population, self.elite_size)
-        next_gen.extend([Individual(e.genome, e.fitness, self.current_generation + 1)
-                        for e in elites])
+        next_gen.extend(
+            [Individual(e.genome, e.fitness, self.current_generation + 1) for e in elites]
+        )
 
         # Generate offspring
         while len(next_gen) < self.population_size:
@@ -262,13 +267,18 @@ class PopulationManager:
                 else:
                     # Clone the corresponding parent instead of always using parent1
                     fallback_parent = parent1 if idx == 0 else parent2
-                    logger.warning(f"Offspring {idx+1} failed validation, cloning corresponding parent")
+                    logger.warning(
+                        f"Offspring {idx+1} failed validation, cloning corresponding parent"
+                    )
                     if len(next_gen) < self.population_size:
-                        parent_copy = Individual(fallback_parent.genome, fallback_parent.fitness,
-                                                self.current_generation + 1)
+                        parent_copy = Individual(
+                            fallback_parent.genome,
+                            fallback_parent.fitness,
+                            self.current_generation + 1,
+                        )
                         next_gen.append(parent_copy)
 
-        return next_gen[:self.population_size]
+        return next_gen[: self.population_size]
 
     def _apply_mutations(self, individual: Individual) -> Individual:
         """Apply various mutations to an individual."""
@@ -276,22 +286,23 @@ class PopulationManager:
             return individual
 
         # Choose mutation type
-        mutation_type = SecureRandom.random_choice(['insertion', 'deletion', 'swap', 'polymorphic'])
+        mutation_type = SecureRandom.random_choice(["insertion", "deletion", "swap", "polymorphic"])
 
         try:
-            if mutation_type == 'insertion':
+            if mutation_type == "insertion":
                 individual = self.operators.mutate_random_insertion(individual, self.gene_pool)
-            elif mutation_type == 'deletion':
+            elif mutation_type == "deletion":
                 individual = self.operators.mutate_random_deletion(individual, max_delete=3)
-            elif mutation_type == 'swap':
+            elif mutation_type == "swap":
                 individual = self.operators.mutate_swap(individual)
-            elif mutation_type == 'polymorphic':
+            elif mutation_type == "polymorphic":
                 # Apply polymorphic mutation
                 from hive_zero_core.agents.genetic_evolution import PolymorphicEngine
+
                 engine = PolymorphicEngine()
-                mutated_genome = engine.mutate_code(individual.genome,
-                                                   SecureRandom.random_int(0, 100000),
-                                                   self.mutation_rate)
+                mutated_genome = engine.mutate_code(
+                    individual.genome, SecureRandom.random_int(0, 100000), self.mutation_rate
+                )
                 individual = Individual(mutated_genome, 0.0, individual.generation)
 
         except Exception as e:
@@ -330,36 +341,39 @@ class PopulationManager:
         fitnesses = [ind.fitness for ind in self.population]
 
         stats = {
-            'generation': self.current_generation,
-            'best_fitness': max(fitnesses),
-            'avg_fitness': np.mean(fitnesses),
-            'worst_fitness': min(fitnesses),
-            'fitness_std': np.std(fitnesses),
-            'unique_genomes': len(set(ind.genome for ind in self.population)),
-            'mutation_rate': self.mutation_rate,
+            "generation": self.current_generation,
+            "best_fitness": max(fitnesses),
+            "avg_fitness": np.mean(fitnesses),
+            "worst_fitness": min(fitnesses),
+            "fitness_std": np.std(fitnesses),
+            "unique_genomes": len(set(ind.genome for ind in self.population)),
+            "mutation_rate": self.mutation_rate,
         }
 
         self.history.append(stats)
 
-        logger.debug(f"Gen {self.current_generation}: avg={stats['avg_fitness']:.3f}, "
-                    f"best={stats['best_fitness']:.3f}, diversity={stats['unique_genomes']}")
+        logger.debug(
+            f"Gen {self.current_generation}: avg={stats['avg_fitness']:.3f}, "
+            f"best={stats['best_fitness']:.3f}, diversity={stats['unique_genomes']}"
+        )
 
     def get_statistics(self) -> Dict:
         """Get comprehensive statistics about evolution process."""
         if not self.history:
-            return {'status': 'not_started'}
+            return {"status": "not_started"}
 
         return {
-            'total_generations': len(self.history),
-            'final_best_fitness': self.best_individual.fitness if self.best_individual else 0.0,
-            'final_avg_fitness': self.history[-1]['avg_fitness'],
-            'convergence_generation': self._find_convergence_generation(),
-            'fitness_improvement': (
-                self.history[-1]['best_fitness'] - self.history[0]['best_fitness']
-                if len(self.history) > 0 else 0.0
+            "total_generations": len(self.history),
+            "final_best_fitness": self.best_individual.fitness if self.best_individual else 0.0,
+            "final_avg_fitness": self.history[-1]["avg_fitness"],
+            "convergence_generation": self._find_convergence_generation(),
+            "fitness_improvement": (
+                self.history[-1]["best_fitness"] - self.history[0]["best_fitness"]
+                if len(self.history) > 0
+                else 0.0
             ),
-            'final_diversity': self.history[-1]['unique_genomes'],
-            'history': self.history,
+            "final_diversity": self.history[-1]["unique_genomes"],
+            "history": self.history,
         }
 
     def _find_convergence_generation(self) -> Optional[int]:
@@ -369,7 +383,7 @@ class PopulationManager:
 
         # Find first generation where improvement stopped
         for i in range(len(self.history) - 5):
-            recent_best = [h['best_fitness'] for h in self.history[i:i+5]]
+            recent_best = [h["best_fitness"] for h in self.history[i : i + 5]]
             if max(recent_best) - min(recent_best) < 0.01:
                 return i
 

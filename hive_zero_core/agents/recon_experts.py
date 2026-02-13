@@ -35,8 +35,9 @@ class Agent_Cartographer(BaseExpert):
         self.res_proj1 = nn.Linear(observation_dim, hidden_dim * heads)
         self.res_proj2 = nn.Linear(hidden_dim * heads, action_dim)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         if context is None:
             return torch.zeros((x.size(0), self.action_dim), device=x.device)
 
@@ -75,8 +76,9 @@ class Agent_DeepScope(BaseExpert):
     adapter to capture richer observation→constraint mappings.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64,
-                 num_heads: int = 4):
+    def __init__(
+        self, observation_dim: int, action_dim: int, hidden_dim: int = 64, num_heads: int = 4
+    ):
         super().__init__(observation_dim, action_dim, name="DeepScope", hidden_dim=hidden_dim)
 
         self.attention = nn.MultiheadAttention(
@@ -89,8 +91,9 @@ class Agent_DeepScope(BaseExpert):
             nn.Linear(hidden_dim, action_dim),
         )
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         # Self-attention over the observation (treat dim as seq of length 1)
         if x.dim() == 2:
             x_seq = x.unsqueeze(1)  # [B, 1, D]
@@ -133,8 +136,14 @@ class Agent_Chronos(BaseExpert):
     dependencies more effectively and parallelises across the sequence.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64,
-                 nhead: int = 4, num_layers: int = 2):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        hidden_dim: int = 64,
+        nhead: int = 4,
+        num_layers: int = 2,
+    ):
         super().__init__(observation_dim, action_dim, name="Chronos", hidden_dim=hidden_dim)
 
         # Project scalar inter-arrival times to hidden_dim
@@ -142,8 +151,12 @@ class Agent_Chronos(BaseExpert):
         self.pos_encoding = nn.Parameter(torch.randn(1, 512, hidden_dim) * 0.02)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_dim, nhead=nhead, dim_feedforward=hidden_dim * 4,
-            dropout=0.1, batch_first=True, activation="gelu"
+            d_model=hidden_dim,
+            nhead=nhead,
+            dim_feedforward=hidden_dim * 4,
+            dropout=0.1,
+            batch_first=True,
+            activation="gelu",
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.norm = nn.LayerNorm(hidden_dim)
@@ -156,8 +169,9 @@ class Agent_Chronos(BaseExpert):
 
         self.head = nn.Linear(hidden_dim, action_dim)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         # Expecting [batch, seq_len] or [batch, seq_len, 1]
         if x.dim() == 2:
             x = x.unsqueeze(-1)  # [B, S] → [B, S, 1]

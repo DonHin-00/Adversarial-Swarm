@@ -53,11 +53,18 @@ class Agent_PreAttackBooster(BaseExpert):
         hardened payload from drifting too far from the original.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int,
-                 hidden_dim: int = 128, refine_steps: int = 3,
-                 refine_lr: float = 0.01, semantic_weight: float = 0.5):
-        super().__init__(observation_dim, action_dim, name="PreAttackBooster",
-                         hidden_dim=hidden_dim)
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        hidden_dim: int = 128,
+        refine_steps: int = 3,
+        refine_lr: float = 0.01,
+        semantic_weight: float = 0.5,
+    ):
+        super().__init__(
+            observation_dim, action_dim, name="PreAttackBooster", hidden_dim=hidden_dim
+        )
 
         self.refine_steps = refine_steps
         self.refine_lr = refine_lr
@@ -96,8 +103,9 @@ class Agent_PreAttackBooster(BaseExpert):
         """
         self._blue_detectors = detectors
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Args:
             x: Raw payload embedding [batch, observation_dim].
@@ -120,8 +128,7 @@ class Agent_PreAttackBooster(BaseExpert):
 
         return hardened
 
-    def _refine(self, payload: torch.Tensor,
-                original: torch.Tensor) -> torch.Tensor:
+    def _refine(self, payload: torch.Tensor, original: torch.Tensor) -> torch.Tensor:
         """
         Gradient-based refinement against registered blue-team detectors.
 
@@ -147,14 +154,10 @@ class Agent_PreAttackBooster(BaseExpert):
             for detector in self._blue_detectors:
                 try:
                     # Ensure the payload matches the detector's expected input dim
-                    detector_input = self.ensure_dimension(
-                        refined, detector.observation_dim
-                    )
+                    detector_input = self.ensure_dimension(refined, detector.observation_dim)
 
-                    if hasattr(detector, 'model'):
-                        logits = detector.model(
-                            inputs_embeds=detector_input.unsqueeze(1)
-                        ).logits
+                    if hasattr(detector, "model"):
+                        logits = detector.model(inputs_embeds=detector_input.unsqueeze(1)).logits
                     else:
                         logits = detector(detector_input)
 

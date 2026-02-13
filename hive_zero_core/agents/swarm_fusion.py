@@ -6,12 +6,9 @@ where individual units can combine into larger, more powerful collectives.
 Enhanced with capability escalation - merged units gain exponentially more power.
 """
 
-from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
-from hive_zero_core.security.audit_logger import SecurityEvent
-from hive_zero_core.security.access_control import OperationType
+from hive_zero_core.security import SecureRandom
 
 import logging
-import random
 from typing import List, Dict, Optional, Tuple, Set
 import hashlib
 from dataclasses import dataclass, field
@@ -20,12 +17,12 @@ from enum import Enum
 from hive_zero_core.agents.genetic_operators import Individual
 from hive_zero_core.agents.capability_escalation import CapabilityManager, EmergentBehaviors
 
-
 logger = logging.getLogger(__name__)
 
 
 class MergeStrategy(Enum):
     """Strategies for merging individuals."""
+
     CONCATENATE = "concatenate"
     INTERLEAVE = "interleave"
     BEST_SEGMENTS = "best_segments"
@@ -40,6 +37,7 @@ class SwarmUnit:
     Can be a single agent or a merged collective.
     Enhanced with capability tracking and power scaling.
     """
+
     id: str
     genome: str
     fitness: float
@@ -64,9 +62,11 @@ class SwarmUnit:
 
     def __repr__(self):
         member_count = len(self.members) if self.members else 1
-        return (f"SwarmUnit(id={self.id[:8]}, level={self.level}, "
-                f"members={member_count}, fitness={self.fitness:.3f}, "
-                f"merges={self.merge_count}, power={self.power_multiplier:.1f}x)")
+        return (
+            f"SwarmUnit(id={self.id[:8]}, level={self.level}, "
+            f"members={member_count}, fitness={self.fitness:.3f}, "
+            f"merges={self.merge_count}, power={self.power_multiplier:.1f}x)"
+        )
 
 
 class SwarmFusion:
@@ -76,8 +76,7 @@ class SwarmFusion:
     Enhanced with capability escalation - merged units gain exponentially more power.
     """
 
-    def __init__(self, min_fitness_threshold: float = 0.5,
-                 max_unit_size: int = 8):
+    def __init__(self, min_fitness_threshold: float = 0.5, max_unit_size: int = 8):
         """
         Initialize swarm fusion engine.
 
@@ -97,46 +96,50 @@ class SwarmFusion:
         """
         Apply capability escalation to a unit based on merge count.
         THE MORE MERGES, THE MORE POWERFUL IT BECOMES.
-        
+
         Args:
             unit: SwarmUnit to enhance
-            
+
         Returns:
             Enhanced unit with new capabilities
         """
         # Unlock capabilities based on merge count
         newly_unlocked = self.capability_manager.unlock_capabilities_for_unit(
-            unit.id,
-            unit.merge_count,
-            unit.unlocked_capabilities
+            unit.id, unit.merge_count, unit.unlocked_capabilities
         )
-        
+
         if newly_unlocked:
             logger.info(f"⚡ Unit {unit.id[:8]} gained {len(newly_unlocked)} new capabilities!")
             for cap in newly_unlocked:
                 logger.info(f"   └─ {cap.name} ({cap.tier.name}): {cap.description}")
-        
+
         # Update unit's capabilities
         unit.unlocked_capabilities = self.capability_manager.unit_capabilities.get(unit.id, set())
-        
+
         # Calculate new power multiplier
         unit.power_multiplier = self.capability_manager.calculate_power_multiplier(unit.id)
-        
+
         # Check for emergent behaviors
         all_capabilities = self.capability_manager.get_unit_capabilities(unit.id)
         unit.emergent_behaviors = EmergentBehaviors.check_emergent_behavior(all_capabilities)
-        
+
         if unit.emergent_behaviors:
-            logger.info(f"🌟 EMERGENT BEHAVIOR DETECTED in {unit.id[:8]}: {', '.join(unit.emergent_behaviors)}")
+            logger.info(
+                f"🌟 EMERGENT BEHAVIOR DETECTED in {unit.id[:8]}: {', '.join(unit.emergent_behaviors)}"
+            )
 
         # Don't modify fitness with power_multiplier to avoid fitness inflation
         # Keep power as separate dimension for selection/merging heuristics
 
         return unit
 
-    def merge_individuals(self, individual1: Individual, individual2: Individual,
-                         strategy: MergeStrategy = MergeStrategy.BEST_SEGMENTS,
-                         generation: int = 0) -> SwarmUnit:
+    def merge_individuals(
+        self,
+        individual1: Individual,
+        individual2: Individual,
+        strategy: MergeStrategy = MergeStrategy.BEST_SEGMENTS,
+        generation: int = 0,
+    ) -> SwarmUnit:
         """
         Merge two individuals into a swarm unit.
 
@@ -161,8 +164,7 @@ class SwarmFusion:
             merged_genome = self._merge_interleave(individual1.genome, individual2.genome)
         elif strategy == MergeStrategy.BEST_SEGMENTS:
             merged_genome = self._merge_best_segments(
-                individual1.genome, individual2.genome,
-                individual1.fitness, individual2.fitness
+                individual1.genome, individual2.genome, individual1.fitness, individual2.fitness
             )
         elif strategy == MergeStrategy.HIERARCHICAL:
             merged_genome = self._merge_hierarchical(individual1.genome, individual2.genome)
@@ -180,16 +182,18 @@ class SwarmFusion:
             fitness=merged_fitness,
             generation=generation,
             members=[
-                str(getattr(individual1, 'gene_seed', f"ind_{hash(individual1.genome)%10000}")),
-                str(getattr(individual2, 'gene_seed', f"ind_{hash(individual2.genome)%10000}"))
+                str(getattr(individual1, "gene_seed", f"ind_{hash(individual1.genome) % 10000}")),
+                str(getattr(individual2, "gene_seed", f"ind_{hash(individual2.genome) % 10000}")),
             ],
             level=1,
             merge_count=1,  # First merge
-            merge_history=[{
-                'generation': generation,
-                'strategy': strategy.value,
-                'parent_fitnesses': [individual1.fitness, individual2.fitness]
-            }]
+            merge_history=[
+                {
+                    "generation": generation,
+                    "strategy": strategy.value,
+                    "parent_fitnesses": [individual1.fitness, individual2.fitness],
+                }
+            ],
         )
 
         # APPLY CAPABILITY ESCALATION
@@ -202,9 +206,13 @@ class SwarmFusion:
 
         return unit
 
-    def merge_units(self, unit1: SwarmUnit, unit2: SwarmUnit,
-                   strategy: MergeStrategy = MergeStrategy.HIERARCHICAL,
-                   generation: int = 0) -> SwarmUnit:
+    def merge_units(
+        self,
+        unit1: SwarmUnit,
+        unit2: SwarmUnit,
+        strategy: MergeStrategy = MergeStrategy.HIERARCHICAL,
+        generation: int = 0,
+    ) -> SwarmUnit:
         """
         Merge two swarm units into a larger collective.
 
@@ -219,15 +227,14 @@ class SwarmFusion:
         """
         # Check size constraints
         if len(unit1.members) + len(unit2.members) > self.max_unit_size:
-            logger.warning(f"Merge would exceed max_unit_size")
+            logger.warning("Merge would exceed max_unit_size")
 
         # Hierarchical merge - preserve structure
         if strategy == MergeStrategy.HIERARCHICAL:
             merged_genome = self._merge_hierarchical(unit1.genome, unit2.genome)
         else:
             merged_genome = self._merge_best_segments(
-                unit1.genome, unit2.genome,
-                unit1.fitness, unit2.fitness
+                unit1.genome, unit2.genome, unit1.fitness, unit2.fitness
             )
 
         # Synergistic fitness (units work together better)
@@ -243,17 +250,22 @@ class SwarmFusion:
             genome=merged_genome,
             fitness=merged_fitness,
             generation=generation,
-            members=(unit1.members + unit2.members)[:self.max_unit_size],
+            members=(unit1.members + unit2.members)[: self.max_unit_size],
             level=max(unit1.level, unit2.level) + 1,
             merge_count=total_merge_count,  # CUMULATIVE MERGE COUNT
-            unlocked_capabilities=unit1.unlocked_capabilities | unit2.unlocked_capabilities,  # Inherit all capabilities
-            merge_history=unit1.merge_history + unit2.merge_history + [{
-                'generation': generation,
-                'strategy': strategy.value,
-                'merged_units': [unit1.id, unit2.id],
-                'synergy_bonus': synergy_bonus,
-                'total_merge_count': total_merge_count
-            }]
+            unlocked_capabilities=unit1.unlocked_capabilities
+            | unit2.unlocked_capabilities,  # Inherit all capabilities
+            merge_history=unit1.merge_history
+            + unit2.merge_history
+            + [
+                {
+                    "generation": generation,
+                    "strategy": strategy.value,
+                    "merged_units": [unit1.id, unit2.id],
+                    "synergy_bonus": synergy_bonus,
+                    "total_merge_count": total_merge_count,
+                }
+            ],
         )
 
         # APPLY CAPABILITY ESCALATION (THE MORE MERGES, THE MORE POWER)
@@ -273,8 +285,8 @@ class SwarmFusion:
 
     def _merge_interleave(self, genome1: str, genome2: str) -> str:
         """Interleave lines from both genomes."""
-        lines1 = genome1.split('\n')
-        lines2 = genome2.split('\n')
+        lines1 = genome1.split("\n")
+        lines2 = genome2.split("\n")
 
         merged = []
         max_len = max(len(lines1), len(lines2))
@@ -285,10 +297,11 @@ class SwarmFusion:
             if i < len(lines2):
                 merged.append(lines2[i])
 
-        return '\n'.join(merged)
+        return "\n".join(merged)
 
-    def _merge_best_segments(self, genome1: str, genome2: str,
-                            fitness1: float, fitness2: float) -> str:
+    def _merge_best_segments(
+        self, genome1: str, genome2: str, fitness1: float, fitness2: float
+    ) -> str:
         """Merge by selecting best segments based on fitness."""
         # Weight ratio
         total_fitness = fitness1 + fitness2
@@ -297,8 +310,8 @@ class SwarmFusion:
         else:
             ratio = fitness1 / total_fitness
 
-        lines1 = genome1.split('\n')
-        lines2 = genome2.split('\n')
+        lines1 = genome1.split("\n")
+        lines2 = genome2.split("\n")
 
         merged = []
         max_len = max(len(lines1), len(lines2))
@@ -316,7 +329,7 @@ class SwarmFusion:
                 elif i < len(lines1):
                     merged.append(lines1[i])
 
-        return '\n'.join(merged)
+        return "\n".join(merged)
 
     def _merge_hierarchical(self, genome1: str, genome2: str) -> str:
         """
@@ -355,12 +368,10 @@ if __name__ == "__main__":
 
     def _indent_code(self, code: str, spaces: int) -> str:
         """Indent code by specified number of spaces."""
-        indent = ' ' * spaces
-        return '\n'.join(indent + line if line.strip() else line
-                        for line in code.split('\n'))
+        indent = " " * spaces
+        return "\n".join(indent + line if line.strip() else line for line in code.split("\n"))
 
-    def create_mega_unit(self, units: List[SwarmUnit],
-                        generation: int = 0) -> SwarmUnit:
+    def create_mega_unit(self, units: List[SwarmUnit], generation: int = 0) -> SwarmUnit:
         """
         Create a mega-unit from multiple swarm units.
         This is the highest level of hierarchy.
@@ -381,9 +392,7 @@ if __name__ == "__main__":
         current = units[0]
         for i in range(1, len(units)):
             current = self.merge_units(
-                current, units[i],
-                strategy=MergeStrategy.HIERARCHICAL,
-                generation=generation
+                current, units[i], strategy=MergeStrategy.HIERARCHICAL, generation=generation
             )
 
         # Mark as mega-unit
@@ -411,8 +420,8 @@ if __name__ == "__main__":
 
         # Trace back through merge history
         for merge_event in unit.merge_history:
-            if 'merged_units' in merge_event:
-                for ancestor_id in merge_event['merged_units']:
+            if "merged_units" in merge_event:
+                for ancestor_id in merge_event["merged_units"]:
                     lineage.extend(self.get_lineage(ancestor_id))
 
         return lineage
@@ -420,32 +429,34 @@ if __name__ == "__main__":
     def get_statistics(self) -> Dict:
         """Get statistics about swarm fusion with capability escalation data."""
         if not self.swarm_registry:
-            return {'total_units': 0, 'merge_count': 0}
+            return {"total_units": 0, "merge_count": 0}
 
         units = list(self.swarm_registry.values())
 
         # Calculate power statistics
         power_multipliers = [u.power_multiplier for u in units]
         max_merge_count = max((u.merge_count for u in units), default=0)
-        
+
         # Get capability statistics
         capability_stats = self.capability_manager.get_statistics()
 
         return {
-            'total_units': len(units),
-            'merge_count': self.merge_count,
-            'max_level': max((u.level for u in units), default=0),
-            'max_merge_count': max_merge_count,
-            'avg_fitness': sum(u.fitness for u in units) / len(units),
-            'mega_units': sum(1 for u in units if u.specialization == "mega_unit"),
-            'level_distribution': self._count_by_level(units),
-            'power_scaling': {
-                'min_power': min(power_multipliers, default=1.0),
-                'max_power': max(power_multipliers, default=1.0),
-                'avg_power': sum(power_multipliers) / len(power_multipliers) if power_multipliers else 1.0,
+            "total_units": len(units),
+            "merge_count": self.merge_count,
+            "max_level": max((u.level for u in units), default=0),
+            "max_merge_count": max_merge_count,
+            "avg_fitness": sum(u.fitness for u in units) / len(units),
+            "mega_units": sum(1 for u in units if u.specialization == "mega_unit"),
+            "level_distribution": self._count_by_level(units),
+            "power_scaling": {
+                "min_power": min(power_multipliers, default=1.0),
+                "max_power": max(power_multipliers, default=1.0),
+                "avg_power": (
+                    sum(power_multipliers) / len(power_multipliers) if power_multipliers else 1.0
+                ),
             },
-            'emergent_behaviors': sum(len(u.emergent_behaviors) for u in units),
-            'capability_unlocks': capability_stats,
+            "emergent_behaviors": sum(len(u.emergent_behaviors) for u in units),
+            "capability_unlocks": capability_stats,
         }
 
     def _count_by_level(self, units: List[SwarmUnit]) -> Dict[int, int]:
@@ -466,7 +477,9 @@ class CollectiveIntelligence:
         """Initialize collective intelligence manager."""
         self.knowledge_base: Dict[str, Set[str]] = {}  # unit_id -> set of learned patterns
         self.specializations: Dict[str, List[str]] = {}  # specialization -> list of unit_ids
-        self.coordination_matrix: Dict[Tuple[str, str], float] = {}  # (unit1, unit2) -> synergy score
+        self.coordination_matrix: Dict[Tuple[str, str], float] = (
+            {}
+        )  # (unit1, unit2) -> synergy score
 
     def share_knowledge(self, donor_unit: SwarmUnit, recipient_unit: SwarmUnit) -> bool:
         """
@@ -493,7 +506,9 @@ class CollectiveIntelligence:
 
             self.knowledge_base[recipient_unit.id].update(novel_patterns)
 
-            logger.info(f"Shared {len(novel_patterns)} patterns: {donor_unit.id[:8]} → {recipient_unit.id[:8]}")
+            logger.info(
+                f"Shared {len(novel_patterns)} patterns: {donor_unit.id[:8]} → {recipient_unit.id[:8]}"
+            )
             return True
 
         return False
@@ -502,9 +517,9 @@ class CollectiveIntelligence:
         """Extract significant patterns from genome."""
         # Simple: split by lines and filter
         patterns = []
-        for line in genome.split('\n'):
+        for line in genome.split("\n"):
             line = line.strip()
-            if len(line) >= min_length and not line.startswith('#'):
+            if len(line) >= min_length and not line.startswith("#"):
                 patterns.append(line)
 
         return patterns
@@ -620,15 +635,19 @@ class CollectiveIntelligence:
             if best_candidate:
                 team.append(best_candidate)
 
-        logger.info(f"Formed optimal team of {len(team)} units (avg synergy: {best_avg_synergy:.3f})")
+        logger.info(
+            f"Formed optimal team of {len(team)} units (avg synergy: {best_avg_synergy:.3f})"
+        )
 
         return team
 
     def get_collective_stats(self) -> Dict:
         """Get statistics about collective intelligence."""
         return {
-            'total_units_with_knowledge': len(self.knowledge_base),
-            'total_patterns_learned': sum(len(patterns) for patterns in self.knowledge_base.values()),
-            'specializations': {k: len(v) for k, v in self.specializations.items()},
-            'coordination_matrix_size': len(self.coordination_matrix),
+            "total_units_with_knowledge": len(self.knowledge_base),
+            "total_patterns_learned": sum(
+                len(patterns) for patterns in self.knowledge_base.values()
+            ),
+            "specializations": {k: len(v) for k, v in self.specializations.items()},
+            "coordination_matrix_size": len(self.coordination_matrix),
         }
