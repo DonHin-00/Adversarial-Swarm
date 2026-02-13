@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "adversarial-swarm"
 version = "0.1.0"
-description = "HIVE-ZERO: Hierarchical Multi-Agent Reinforcement Learning system with adversarial swarm intelligence"
+description = "HIVE-ZERO: Hierarchical Multi-Agent Reinforcement Learning system with adversarial swarm intelligence for network security research"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

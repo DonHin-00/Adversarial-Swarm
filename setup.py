@@ -12,7 +12,7 @@ setup(
     name="adversarial-swarm",
     version="0.1.0",
     author="DonHin-00",
-    description="Adversarial System with Multi-Expert Architecture",
+    description="HIVE-ZERO: Hierarchical Multi-Agent Reinforcement Learning system with adversarial swarm intelligence for network security research",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/DonHin-00/Adversarial-Swarm",
