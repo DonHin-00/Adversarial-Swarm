@@ -31,19 +31,19 @@ class SyntheticExperienceGenerator:
         idle_size = batch_size // 3
         scan_size = batch_size // 3
         attack_size = batch_size - idle_size - scan_size
-        
+
         # 1. Observations: Simulate diversified network traffic
         # Vectorized generation for better performance
-        
+
         # Cluster 1: Idle / Noise (Low Magnitude)
         idle_obs = torch.randn(idle_size, self.obs_dim) * 0.1
 
         # Cluster 2: Recon Scan (Structured Spikes)
         scan_obs = torch.randn(scan_size, self.obs_dim) * 0.5
-        scan_obs[:, :10] += 2.0 # High signals in first 10 dims (Simulating Ports)
+        scan_obs[:, :10] += 2.0  # High signals in first 10 dims (Simulating Ports)
 
         # Cluster 3: Active Attack (High Magnitude, Complex)
-        attack_obs = torch.abs(torch.randn(attack_size, self.obs_dim)) * 2.0 # Strong signals
+        attack_obs = torch.abs(torch.randn(attack_size, self.obs_dim)) * 2.0  # Strong signals
 
         obs = torch.cat([idle_obs, scan_obs, attack_obs], dim=0)
         # Shuffle
@@ -58,7 +58,7 @@ class SyntheticExperienceGenerator:
         actions += high_mask * torch.randn(batch_size, self.act_dim, device=device) * 5.0
 
         # Low Intensity -> Generate "Map" patterns (Structured) - optimized
-        low_mask = (1.0 - high_mask)
+        low_mask = 1.0 - high_mask
         pattern = torch.sin(torch.linspace(0, 10, self.act_dim))
         actions += low_mask * pattern.unsqueeze(0)
 
@@ -90,13 +90,13 @@ class WeightInitializer:
           and +1.0 for Cartographer (index 0).
         """
         for name, param in module.named_parameters():
-            if 'bias' in name and param.dim() == 1:
+            if "bias" in name and param.dim() == 1:
                 nn.init.constant_(param, 0.01)
-            elif 'weight' in name and param.dim() >= 2:
+            elif "weight" in name and param.dim() >= 2:
                 nn.init.xavier_normal_(param)
 
         # Gating-specific: elevate defence cluster and recon
-        if hasattr(module, 'net') and isinstance(module.net, nn.Sequential):
+        if hasattr(module, "net") and isinstance(module.net, nn.Sequential):
             last_linear = module.net[-1]
             if isinstance(last_linear, nn.Linear):
                 with torch.no_grad():
@@ -128,18 +128,14 @@ class KnowledgeLoader:
         Raises:
             TypeError: If the buffer has neither ``add`` nor ``push``.
         """
-        obs, acts, rews, next_obs, dones = self.generator.generate_batch(
-            num_samples, device=device
-        )
+        obs, acts, rews, next_obs, dones = self.generator.generate_batch(num_samples, device=device)
 
-        if hasattr(replay_buffer, 'add'):
+        if hasattr(replay_buffer, "add"):
             push_fn = replay_buffer.add
-        elif hasattr(replay_buffer, 'push'):
+        elif hasattr(replay_buffer, "push"):
             push_fn = replay_buffer.push
         else:
-            raise TypeError(
-                f"Replay buffer must expose 'add' or 'push'; got {type(replay_buffer)}"
-            )
+            raise TypeError(f"Replay buffer must expose 'add' or 'push'; got {type(replay_buffer)}")
 
         for i in range(num_samples):
             push_fn(obs[i], acts[i], rews[i], next_obs[i], dones[i])

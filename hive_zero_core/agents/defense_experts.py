@@ -38,13 +38,15 @@ class TrapArsenal:
         y = torch.zeros_like(x)
         a, b = 0.5, 3
         for n in range(5):
-            y += (a ** n) * torch.cos((b ** n) * math.pi * x)
+            y += (a**n) * torch.cos((b**n) * math.pi * x)
         return y * 10.0
 
     @staticmethod
     def resource_nova(batch_size: int, dim: int, device: torch.device) -> torch.Tensor:
         """The Zip Bomb: Exponential growth request."""
-        return torch.exp(torch.linspace(0, 10, dim, device=device)).unsqueeze(0).expand(batch_size, -1)
+        return (
+            torch.exp(torch.linspace(0, 10, dim, device=device)).unsqueeze(0).expand(batch_size, -1)
+        )
 
     @staticmethod
     def port_maze_noise(batch_size: int, dim: int, device: torch.device) -> torch.Tensor:
@@ -78,8 +80,14 @@ class Agent_Tarpit(BaseExpert):
     producing richer context-dependent trap combinations.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 128,
-                 num_traps: int = 25, attn_heads: int = 4):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        hidden_dim: int = 128,
+        num_traps: int = 25,
+        attn_heads: int = 4,
+    ):
         super().__init__(observation_dim, action_dim, name="Tarpit", hidden_dim=hidden_dim)
 
         self.num_traps = num_traps
@@ -100,7 +108,7 @@ class Agent_Tarpit(BaseExpert):
             nn.GELU(),
             nn.Linear(hidden_dim, action_dim),
         )
-        
+
         # Cache for trap templates to avoid regenerating static components
         self._trap_cache = None
         self._cache_batch_size = None
@@ -113,49 +121,54 @@ class Agent_Tarpit(BaseExpert):
         """
         # Only use cache in eval mode to preserve training randomness
         use_cache = not self.training
-        
-        if (use_cache and self._trap_cache is not None and 
-            self._cache_batch_size == batch_size and 
-            self._trap_cache.device == device):
+
+        if (
+            use_cache
+            and self._trap_cache is not None
+            and self._cache_batch_size == batch_size
+            and self._trap_cache.device == device
+        ):
             return self._trap_cache
-        
+
         traps = []
-        
+
         # Trap 1-5: Chaos Variants (reduced redundant calls)
         chaos_base = TrapArsenal.chaotic_dynamics(batch_size, self.action_dim, device)
         for i in range(5):
-            traps.append(chaos_base * (i + 1)) # Scale variance
-        
+            traps.append(chaos_base * (i + 1))  # Scale variance
+
         # Trap 6-10: Fractal Variants
         fractal_base = TrapArsenal.recursive_fractal(batch_size, self.action_dim, device)
         for i in range(5):
             traps.append(fractal_base + torch.randn_like(fractal_base) * 0.1 * i)
-        
+
         # Trap 11-15: Gradient/Resource Traps (alternating pattern)
         for i in range(5):
             if i % 2 == 0:
                 traps.append(TrapArsenal.gradient_trap(batch_size, self.action_dim, device))
             else:
                 traps.append(TrapArsenal.resource_nova(batch_size, self.action_dim, device))
-        
+
         # Trap 16-20: Port Maze / Noise
         for i in range(5):
             traps.append(TrapArsenal.port_maze_noise(batch_size, self.action_dim, device))
-        
+
         # Trap 21-25: Spectral and Temporal
         for i in range(3):
-            traps.append(TrapArsenal.spectral_comb(batch_size, self.action_dim, device) * (0.5 + 0.5 * i))
+            traps.append(
+                TrapArsenal.spectral_comb(batch_size, self.action_dim, device) * (0.5 + 0.5 * i)
+            )
         for i in range(2):
             traps.append(TrapArsenal.temporal_jitter(batch_size, self.action_dim, device) * (1 + i))
-        
+
         # Stack: [Batch, Num_Traps, Action_Dim]
-        trap_stack = torch.stack(traps[:self.num_traps], dim=1)
-        
+        trap_stack = torch.stack(traps[: self.num_traps], dim=1)
+
         # Cache for reuse in eval mode only (keep on same device to avoid unnecessary copies)
         if use_cache:
             self._trap_cache = trap_stack.detach()
             self._cache_batch_size = batch_size
-        
+
         return trap_stack
 
     def _generate_arsenal(self, batch_size: int, device: torch.device) -> torch.Tensor:
@@ -191,13 +204,14 @@ class Agent_Tarpit(BaseExpert):
         for i in range(4):
             traps.append(TrapArsenal.temporal_jitter(batch_size, dim, device) * (1 + i))
 
-        assert len(traps) >= self.num_traps, (
-            f"Generated {len(traps)} traps but need {self.num_traps}"
-        )
-        return torch.stack(traps[:self.num_traps], dim=1)  # [B, T, D]
+        assert (
+            len(traps) >= self.num_traps
+        ), f"Generated {len(traps)} traps but need {self.num_traps}"
+        return torch.stack(traps[: self.num_traps], dim=1)  # [B, T, D]
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         batch_size = x.size(0)
         device = x.device
 
@@ -205,7 +219,7 @@ class Agent_Tarpit(BaseExpert):
         trap_stack = self._generate_arsenal(batch_size, device)  # [B, T, D]
 
         # Project to hidden for attention
-        trap_kv = self.trap_proj(trap_stack)   # [B, T, H]
+        trap_kv = self.trap_proj(trap_stack)  # [B, T, H]
         obs_q = self.obs_proj(x).unsqueeze(1)  # [B, 1, H]
 
         # Cross-attention: observation queries attend over traps

@@ -128,13 +128,13 @@ class LogEncoder(nn.Module):
         """
         # Get device from module parameters for device-aware tensor creation
         device = self.ip_projection.weight.device
-        
+
         if not logs:
             # Return empty graph with correct feature dimensions on correct device
             return Data(
                 x=torch.zeros((0, self.node_feature_dim), device=device),
                 edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device)
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device),
             )
             return self._empty_graph()
 
@@ -182,23 +182,23 @@ class LogEncoder(nn.Module):
         # Create Node Features Tensor
         # Vectorized batch processing for better performance
         num_nodes = self.next_idx
-        
+
         # Get device from module parameters
         device = self.ip_projection.weight.device
-        
+
         if num_nodes == 0:
-             return Data(
+            return Data(
                 x=torch.zeros((0, self.node_feature_dim), device=device),
                 edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
-                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device)
+                edge_attr=torch.empty((0, self.edge_feature_dim * 2), device=device),
             )
-        
+
         # Vectorized IP to bits conversion using list comprehension and stack
         # This is more efficient than loop-based tensor assignment
         x_raw_list = [self._ip_to_bits(self.idx_to_ip[i]) for i in range(num_nodes)]
-        x_tensor = torch.stack(x_raw_list).to(device) # [num_nodes, 32]
-        
-        x_embedded = self.ip_projection(x_tensor) # [num_nodes, node_feature_dim]
+        x_tensor = torch.stack(x_raw_list).to(device)  # [num_nodes, 32]
+
+        x_embedded = self.ip_projection(x_tensor)  # [num_nodes, node_feature_dim]
         x_raw_list = []
         for i in range(num_nodes):
             ip_str = self.idx_to_ip[i]
@@ -219,24 +219,30 @@ class LogEncoder(nn.Module):
             ports = torch.tensor(ports_list, dtype=torch.long, device=device)
             protos = torch.tensor(protos_list, dtype=torch.long, device=device)
 
-            port_embeds = self.port_embedding(ports) # [num_edges, edge_feature_dim]
-            proto_embeds = self.proto_embedding(protos) # [num_edges, edge_feature_dim]
+            port_embeds = self.port_embedding(ports)  # [num_edges, edge_feature_dim]
+            proto_embeds = self.proto_embedding(protos)  # [num_edges, edge_feature_dim]
 
-            edge_attr = torch.cat([port_embeds, proto_embeds], dim=1) # [num_edges, edge_feature_dim * 2]
+            edge_attr = torch.cat(
+                [port_embeds, proto_embeds], dim=1
+            )  # [num_edges, edge_feature_dim * 2]
         else:
             edge_attr = torch.empty((0, self.edge_feature_dim * 2), device=device)
         # Create Edge Attributes Tensor on the same device as the embedding layers
         # to avoid device-mismatch errors when LogEncoder is moved to GPU.
         emb_device = self.port_embedding.weight.device
         ports = torch.clamp(
-            torch.tensor([attr[0] for attr in edge_attr_inputs], dtype=torch.long,
-                         device=emb_device),
-            0, 65535,
+            torch.tensor(
+                [attr[0] for attr in edge_attr_inputs], dtype=torch.long, device=emb_device
+            ),
+            0,
+            65535,
         )
         protos = torch.clamp(
-            torch.tensor([attr[1] for attr in edge_attr_inputs], dtype=torch.long,
-                         device=emb_device),
-            0, 255,
+            torch.tensor(
+                [attr[1] for attr in edge_attr_inputs], dtype=torch.long, device=emb_device
+            ),
+            0,
+            255,
         )
 
         port_embeds = self.port_embedding(ports)  # [num_edges, edge_feature_dim]
@@ -280,10 +286,12 @@ class LogEncoder(nn.Module):
 
         # Use most recent timestamps in the order they were added
         # Note: We need max_len+1 timestamps to produce max_len intervals
-        recent_times = self.timestamps[-(max_len + 1):]
+        recent_times = self.timestamps[-(max_len + 1) :]
 
         # Compute inter-arrival times (differences between consecutive timestamps)
-        inter_arrivals = [recent_times[i+1] - recent_times[i] for i in range(len(recent_times) - 1)]
+        inter_arrivals = [
+            recent_times[i + 1] - recent_times[i] for i in range(len(recent_times) - 1)
+        ]
 
         # Convert to tensor
         if inter_arrivals:

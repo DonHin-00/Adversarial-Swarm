@@ -6,14 +6,10 @@ elitism, fitness-based selection, and adaptive mutation strategies.
 """
 
 import logging
-from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
-from hive_zero_core.security.audit_logger import SecurityEvent
-from hive_zero_core.security.access_control import OperationType
+from hive_zero_core.security import SecureRandom
 
-import random
 from typing import List, Tuple, Optional, Callable
 import numpy as np
-
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +33,9 @@ class Individual:
         self.parents = []  # Track lineage
 
     def __repr__(self):
-        return f"Individual(gen={self.generation}, fitness={self.fitness:.3f}, seed={self.gene_seed})"
+        return (
+            f"Individual(gen={self.generation}, fitness={self.fitness:.3f}, seed={self.gene_seed})"
+        )
 
 
 class FitnessFunction:
@@ -55,13 +53,14 @@ class FitnessFunction:
                      e.g., {'diversity': 0.3, 'validity': 0.5, 'evasion': 0.2}
         """
         self.weights = weights or {
-            'diversity': 0.3,  # How different from original
-            'validity': 0.5,   # Syntactic correctness
-            'evasion': 0.2     # Potential to evade detection
+            "diversity": 0.3,  # How different from original
+            "validity": 0.5,  # Syntactic correctness
+            "evasion": 0.2,  # Potential to evade detection
         }
 
-    def evaluate(self, individual: Individual, original: str,
-                validator: Callable[[str], bool]) -> float:
+    def evaluate(
+        self, individual: Individual, original: str, validator: Callable[[str], bool]
+    ) -> float:
         """
         Evaluate fitness of an individual.
 
@@ -76,13 +75,13 @@ class FitnessFunction:
         scores = {}
 
         # Diversity: Levenshtein-like distance from original
-        scores['diversity'] = self._calculate_diversity(individual.genome, original)
+        scores["diversity"] = self._calculate_diversity(individual.genome, original)
 
         # Validity: Can it compile/execute?
-        scores['validity'] = 1.0 if validator(individual.genome) else 0.0
+        scores["validity"] = 1.0 if validator(individual.genome) else 0.0
 
         # Evasion: Estimated evasion potential (length, entropy, uniqueness)
-        scores['evasion'] = self._calculate_evasion_potential(individual.genome)
+        scores["evasion"] = self._calculate_evasion_potential(individual.genome)
 
         # Weighted sum
         fitness = sum(scores[k] * self.weights[k] for k in scores)
@@ -132,7 +131,7 @@ class FitnessFunction:
         unique_ratio = len(set(genome)) / len(genome) if genome else 0.0
 
         # Combined score
-        return (entropy * 0.7 + unique_ratio * 0.3)
+        return entropy * 0.7 + unique_ratio * 0.3
 
 
 class GeneticOperators:
@@ -142,8 +141,9 @@ class GeneticOperators:
     """
 
     @staticmethod
-    def crossover_single_point(parent1: Individual, parent2: Individual,
-                               generation: int) -> Tuple[Individual, Individual]:
+    def crossover_single_point(
+        parent1: Individual, parent2: Individual, generation: int
+    ) -> Tuple[Individual, Individual]:
         """
         Single-point crossover between two parents.
 
@@ -176,13 +176,16 @@ class GeneticOperators:
         offspring1.parents = [parent1.gene_seed, parent2.gene_seed]
         offspring2.parents = [parent2.gene_seed, parent1.gene_seed]
 
-        logger.debug(f"Crossover at point {point}: {len(g1)}, {len(g2)} → {len(offspring1_genome)}, {len(offspring2_genome)}")
+        logger.debug(
+            f"Crossover at point {point}: {len(g1)}, {len(g2)} → {len(offspring1_genome)}, {len(offspring2_genome)}"
+        )
 
         return offspring1, offspring2
 
     @staticmethod
-    def crossover_uniform(parent1: Individual, parent2: Individual,
-                         generation: int, probability: float = 0.5) -> Individual:
+    def crossover_uniform(
+        parent1: Individual, parent2: Individual, generation: int, probability: float = 0.5
+    ) -> Individual:
         """
         Uniform crossover: each character randomly chosen from either parent.
 
@@ -203,7 +206,7 @@ class GeneticOperators:
         g2_padded = g2.ljust(max_len)
 
         # Uniform selection
-        offspring_genome = ''.join(
+        offspring_genome = "".join(
             g1_padded[i] if SecureRandom.random_float() < probability else g2_padded[i]
             for i in range(max_len)
         ).rstrip()
@@ -261,7 +264,7 @@ class GeneticOperators:
         delete_len = SecureRandom.random_int(1, min(max_delete, len(genome) // 2))
         position = SecureRandom.random_int(0, len(genome) - delete_len)
 
-        mutated_genome = genome[:position] + genome[position + delete_len:]
+        mutated_genome = genome[:position] + genome[position + delete_len :]
         mutated = Individual(mutated_genome, 0.0, individual.generation)
         mutated.parents = [individual.gene_seed]
 
@@ -291,7 +294,7 @@ class GeneticOperators:
         # Swap
         genome[pos1], genome[pos2] = genome[pos2], genome[pos1]
 
-        mutated_genome = ''.join(genome)
+        mutated_genome = "".join(genome)
         mutated = Individual(mutated_genome, 0.0, individual.generation)
         mutated.parents = [individual.gene_seed]
 
@@ -306,8 +309,7 @@ class SelectionStrategies:
     """
 
     @staticmethod
-    def tournament_selection(population: List[Individual],
-                           tournament_size: int = 3) -> Individual:
+    def tournament_selection(population: List[Individual], tournament_size: int = 3) -> Individual:
         """
         Tournament selection: randomly select k individuals, return best.
 
@@ -348,7 +350,7 @@ class SelectionStrategies:
             # All zero fitness, random selection
             return SecureRandom.random_choice(population)
 
-        pick = (SecureRandom.random_float() * (total_fitness - (0)) + (0))
+        pick = SecureRandom.random_float() * (total_fitness - (0)) + (0)
         current = 0
 
         for individual in population:
@@ -361,8 +363,7 @@ class SelectionStrategies:
         return population[-1]
 
     @staticmethod
-    def elitism_selection(population: List[Individual],
-                         elite_size: int = 2) -> List[Individual]:
+    def elitism_selection(population: List[Individual], elite_size: int = 2) -> List[Individual]:
         """
         Elitism: select top-k individuals.
 

@@ -8,12 +8,8 @@ Inspired by self-modifying malware techniques adapted for legitimate red team op
 import ast
 import logging
 import random
-from hive_zero_core.security import SecureRandom, InputValidator, AuditLogger, AccessController
-from hive_zero_core.security.audit_logger import SecurityEvent
-from hive_zero_core.security.access_control import OperationType
 
 from typing import Optional, Tuple
-
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +45,7 @@ class PolymorphicEngine:
         try:
             # Use local Random instance to avoid global RNG side effects
             rng = random.Random(gene_seed)
-            lines = source_code.split('\n')
+            lines = source_code.split("\n")
             new_lines = []
             mutations_applied = 0
 
@@ -65,14 +61,10 @@ class PolymorphicEngine:
                 new_lines.append(line)
                 # Inject junk after function definitions, class definitions, or imports
                 line_stripped = line.strip()
-                is_def_or_class = (
-                    line_stripped.startswith("def ") or
-                    line_stripped.startswith("class ")
+                is_def_or_class = line_stripped.startswith("def ") or line_stripped.startswith(
+                    "class "
                 )
-                is_import = (
-                    line_stripped.startswith("import ") or
-                    line_stripped.startswith("from ")
-                )
+                is_import = line_stripped.startswith("import ") or line_stripped.startswith("from ")
                 if is_def_or_class or is_import:
                     if rng.random() < mutation_rate:
                         # Get indentation from original line
@@ -86,11 +78,10 @@ class PolymorphicEngine:
             # Ensure at least one mutation was applied
             if mutations_applied == 0 and len(lines) > 0:
                 # Force at least one mutation at the beginning
-                new_lines.insert(1 if len(new_lines) > 1 else 0,
-                                f"# GENETIC_MARKER_{gene_seed}")
+                new_lines.insert(1 if len(new_lines) > 1 else 0, f"# GENETIC_MARKER_{gene_seed}")
                 mutations_applied = 1
 
-            result = '\n'.join(new_lines)
+            result = "\n".join(new_lines)
             logger.debug(f"Applied {mutations_applied} mutations with seed {gene_seed}")
             return result
 
@@ -131,7 +122,9 @@ class PolymorphicEngine:
                 lambda s: s + f"#{gene_seed}",  # Comment padding
                 lambda s: f"/* GEN:{gene_seed} */{s}",  # C-style comment
                 lambda s: f"<!-- {gene_seed} -->{s}",  # HTML comment
-                lambda s: s.replace(" ", "  " if rng.random() > 0.5 else " "),  # Whitespace variation
+                lambda s: s.replace(
+                    " ", "  " if rng.random() > 0.5 else " "
+                ),  # Whitespace variation
                 lambda s: s + "\x00" * rng.randint(1, 2),  # Minimal null byte padding
                 lambda s: f"{s}\n-- GENE:{gene_seed}",  # SQL comment style
                 lambda s: s + " " * rng.randint(1, 3),  # Trailing spaces
@@ -184,14 +177,15 @@ class NaturalSelection:
 
         try:
             # Attempt compilation
-            compile(source_code, '<string>', 'exec')
+            compile(source_code, "<string>", "exec")
 
             # Strict mode: additional checks
             if strict:
                 # Check for at least some meaningful content
                 non_comment_lines = [
-                    line for line in source_code.split('\n')
-                    if line.strip() and not line.strip().startswith('#')
+                    line
+                    for line in source_code.split("\n")
+                    if line.strip() and not line.strip().startswith("#")
                 ]
                 if len(non_comment_lines) == 0:
                     return False
@@ -229,9 +223,9 @@ class NaturalSelection:
             return False, None
 
     @staticmethod
-    def validate_payload(payload: str, max_length: int = 10000,
-                        max_null_bytes: int = 5,
-                        allow_empty: bool = False) -> bool:
+    def validate_payload(
+        payload: str, max_length: int = 10000, max_null_bytes: int = 5, allow_empty: bool = False
+    ) -> bool:
         """
         Validate that a payload meets basic safety constraints.
 
@@ -255,7 +249,7 @@ class NaturalSelection:
                 return False
 
             # Check for excessive null termination
-            null_count = payload.count('\x00')
+            null_count = payload.count("\x00")
             if null_count > max_null_bytes:
                 logger.debug(f"Too many null bytes: {null_count} > {max_null_bytes}")
                 return False
@@ -273,6 +267,7 @@ class NaturalSelection:
         except Exception as e:
             logger.warning(f"Error during payload validation: {e}")
             return False
+
 
 class GenerationTracker:
     """
@@ -295,19 +290,15 @@ class GenerationTracker:
         """
         self.current_generation += 1
 
-        entry = {
-            'generation': self.current_generation,
-            'gene_seed': gene_seed,
-            'success': success
-        }
+        entry = {"generation": self.current_generation, "gene_seed": gene_seed, "success": success}
         if metadata:
-            entry['metadata'] = metadata
+            entry["metadata"] = metadata
 
         self.mutation_history.append(entry)
 
         # Trim history if it gets too large
         if len(self.mutation_history) > self.max_history_size:
-            self.mutation_history = self.mutation_history[-self.max_history_size:]
+            self.mutation_history = self.mutation_history[-self.max_history_size :]
 
     def get_generation(self) -> int:
         """Get current generation number."""
@@ -317,26 +308,26 @@ class GenerationTracker:
         """Get statistics about mutation history."""
         if not self.mutation_history:
             return {
-                'total': 0,
-                'successful': 0,
-                'success_rate': 0.0,
-                'current_generation': self.current_generation
+                "total": 0,
+                "successful": 0,
+                "success_rate": 0.0,
+                "current_generation": self.current_generation,
             }
 
         total = len(self.mutation_history)
-        successful = sum(1 for m in self.mutation_history if m['success'])
+        successful = sum(1 for m in self.mutation_history if m["success"])
 
         # Calculate recent success rate (last 10 mutations)
         recent_history = self.mutation_history[-10:]
-        recent_successful = sum(1 for m in recent_history if m['success'])
+        recent_successful = sum(1 for m in recent_history if m["success"])
         recent_rate = recent_successful / len(recent_history) if recent_history else 0.0
 
         return {
-            'total': total,
-            'successful': successful,
-            'success_rate': successful / total if total > 0 else 0.0,
-            'recent_success_rate': recent_rate,
-            'current_generation': self.current_generation
+            "total": total,
+            "successful": successful,
+            "success_rate": successful / total if total > 0 else 0.0,
+            "recent_success_rate": recent_rate,
+            "current_generation": self.current_generation,
         }
 
     def reset(self):
@@ -373,8 +364,9 @@ class GeneticEvolution:
         self.max_generations = max_generations
         self.mutation_rate = mutation_rate
 
-    def evolve_code(self, source_code: str, max_attempts: int = 10,
-                   strict_validation: bool = False) -> Tuple[str, int, bool]:
+    def evolve_code(
+        self, source_code: str, max_attempts: int = 10, strict_validation: bool = False
+    ) -> Tuple[str, int, bool]:
         """
         Evolve Python source code through multiple generations.
 
@@ -406,7 +398,7 @@ class GeneticEvolution:
                     mutated = self.engine.mutate_code(source_code, gene_seed, self.mutation_rate)
                 except Exception as e:
                     logger.warning(f"Mutation attempt {attempt} failed: {e}")
-                    self.tracker.increment_generation(gene_seed, False, {'error': str(e)})
+                    self.tracker.increment_generation(gene_seed, False, {"error": str(e)})
                     continue
 
                 # Validate the mutated code
@@ -418,7 +410,9 @@ class GeneticEvolution:
                 else:
                     self.tracker.increment_generation(gene_seed, False)
                     # Keep first valid mutation as backup
-                    if best_mutated is None and self.selector.validate_python(mutated, strict=False):
+                    if best_mutated is None and self.selector.validate_python(
+                        mutated, strict=False
+                    ):
                         best_mutated = mutated
                         best_seed = gene_seed
 
@@ -434,8 +428,9 @@ class GeneticEvolution:
         logger.warning("All mutation attempts failed, returning original code")
         return source_code, 0, False
 
-    def evolve_payload(self, payload: str, max_attempts: int = 10,
-                      max_length: int = 10000) -> Tuple[str, int, bool]:
+    def evolve_payload(
+        self, payload: str, max_attempts: int = 10, max_length: int = 10000
+    ) -> Tuple[str, int, bool]:
         """
         Evolve a string payload through multiple generations.
 
@@ -464,7 +459,7 @@ class GeneticEvolution:
                     mutated = self.engine.mutate_string(payload, gene_seed, min_mutations=1)
                 except Exception as e:
                     logger.warning(f"Mutation attempt {attempt} failed: {e}")
-                    self.tracker.increment_generation(gene_seed, False, {'error': str(e)})
+                    self.tracker.increment_generation(gene_seed, False, {"error": str(e)})
                     continue
 
                 # Validate the mutated payload
@@ -485,7 +480,7 @@ class GeneticEvolution:
             fallback_mutated = payload + f"#{fallback_seed}"
             if self.selector.validate_payload(fallback_mutated, max_length=max_length):
                 logger.info("Using fallback mutation")
-                self.tracker.increment_generation(fallback_seed, True, {'fallback': True})
+                self.tracker.increment_generation(fallback_seed, True, {"fallback": True})
                 return fallback_mutated, fallback_seed, True
         except Exception as e:
             # Log the failure and fall through to absolute fallback to avoid silent failures

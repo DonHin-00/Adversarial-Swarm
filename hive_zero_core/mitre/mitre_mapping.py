@@ -18,6 +18,7 @@ from enum import Enum
 
 class MITRETactic(Enum):
     """MITRE ATT&CK Tactics (14 total)."""
+
     RECONNAISSANCE = "TA0043"
     RESOURCE_DEVELOPMENT = "TA0042"
     INITIAL_ACCESS = "TA0001"
@@ -36,6 +37,7 @@ class MITRETactic(Enum):
 
 class MITREATLASTactic(Enum):
     """MITRE ATLAS Tactics (AI/ML specific)."""
+
     ML_MODEL_ACCESS = "AML.TA0000"
     ML_ATTACK_STAGING = "AML.TA0001"
     INITIAL_ACCESS_ML = "AML.TA0002"
@@ -51,6 +53,7 @@ class MITREATLASTactic(Enum):
 @dataclass
 class MITRETechnique:
     """Represents a MITRE ATT&CK or ATLAS technique."""
+
     technique_id: str
     name: str
     description: str
@@ -66,121 +69,252 @@ class MITRETechnique:
 MITRE_ATTACK_TECHNIQUES: Dict[str, MITRETechnique] = {}
 MITRE_ATLAS_TECHNIQUES: Dict[str, MITRETechnique] = {}
 
+
 def _init_techniques():
     """Initialize all MITRE techniques."""
-    global MITRE_ATTACK_TECHNIQUES, MITRE_ATLAS_TECHNIQUES
-    
     # === MITRE ATT&CK ENTERPRISE ===
     attack_data = {
         # Reconnaissance
         "T1595": ("Active Scanning", "Network scanning", MITRETactic.RECONNAISSANCE.value),
         "T1595.001": ("Scanning IP Blocks", "Scan IP ranges", MITRETactic.RECONNAISSANCE.value),
-        "T1592": ("Gather Victim Host Information", "Collect host info", MITRETactic.RECONNAISSANCE.value),
-        "T1590": ("Gather Victim Network Information", "Collect network info", MITRETactic.RECONNAISSANCE.value),
-        
+        "T1592": (
+            "Gather Victim Host Information",
+            "Collect host info",
+            MITRETactic.RECONNAISSANCE.value,
+        ),
+        "T1590": (
+            "Gather Victim Network Information",
+            "Collect network info",
+            MITRETactic.RECONNAISSANCE.value,
+        ),
         # Initial Access
         "T1078": ("Valid Accounts", "Use legitimate credentials", MITRETactic.INITIAL_ACCESS.value),
-        "T1190": ("Exploit Public-Facing Application", "Exploit vulnerabilities", MITRETactic.INITIAL_ACCESS.value),
+        "T1190": (
+            "Exploit Public-Facing Application",
+            "Exploit vulnerabilities",
+            MITRETactic.INITIAL_ACCESS.value,
+        ),
         "T1133": ("External Remote Services", "VPN/RDP access", MITRETactic.INITIAL_ACCESS.value),
         "T1566": ("Phishing", "Phishing attacks", MITRETactic.INITIAL_ACCESS.value),
-        "T1566.001": ("Spearphishing Attachment", "Malicious attachments", MITRETactic.INITIAL_ACCESS.value),
+        "T1566.001": (
+            "Spearphishing Attachment",
+            "Malicious attachments",
+            MITRETactic.INITIAL_ACCESS.value,
+        ),
         "T1566.002": ("Spearphishing Link", "Malicious links", MITRETactic.INITIAL_ACCESS.value),
-        
-        # Execution  
-        "T1059": ("Command and Scripting Interpreter", "Execute commands", MITRETactic.EXECUTION.value),
+        # Execution
+        "T1059": (
+            "Command and Scripting Interpreter",
+            "Execute commands",
+            MITRETactic.EXECUTION.value,
+        ),
         "T1059.001": ("PowerShell", "Execute PowerShell", MITRETactic.EXECUTION.value),
         "T1059.003": ("Windows Command Shell", "Execute cmd.exe", MITRETactic.EXECUTION.value),
         "T1059.004": ("Unix Shell", "Execute bash/sh", MITRETactic.EXECUTION.value),
         "T1059.006": ("Python", "Execute Python code", MITRETactic.EXECUTION.value),
-        "T1203": ("Exploitation for Client Execution", "Exploit vulnerabilities", MITRETactic.EXECUTION.value),
-        
+        "T1203": (
+            "Exploitation for Client Execution",
+            "Exploit vulnerabilities",
+            MITRETactic.EXECUTION.value,
+        ),
         # Persistence
         "T1053": ("Scheduled Task/Job", "Scheduled tasks", MITRETactic.PERSISTENCE.value),
         "T1053.005": ("Scheduled Task", "Windows Scheduled Task", MITRETactic.PERSISTENCE.value),
         "T1053.003": ("Cron", "Linux cron job", MITRETactic.PERSISTENCE.value),
-        "T1547": ("Boot or Logon Autostart Execution", "Autostart mechanisms", MITRETactic.PERSISTENCE.value),
+        "T1547": (
+            "Boot or Logon Autostart Execution",
+            "Autostart mechanisms",
+            MITRETactic.PERSISTENCE.value,
+        ),
         "T1547.001": ("Registry Run Keys", "Registry autostart", MITRETactic.PERSISTENCE.value),
-        "T1543": ("Create or Modify System Process", "System services", MITRETactic.PERSISTENCE.value),
+        "T1543": (
+            "Create or Modify System Process",
+            "System services",
+            MITRETactic.PERSISTENCE.value,
+        ),
         "T1543.003": ("Windows Service", "Windows service", MITRETactic.PERSISTENCE.value),
         "T1546": ("Event Triggered Execution", "Event triggers", MITRETactic.PERSISTENCE.value),
-        "T1546.015": ("Component Object Model Hijacking", "COM hijacking", MITRETactic.PERSISTENCE.value),
+        "T1546.015": (
+            "Component Object Model Hijacking",
+            "COM hijacking",
+            MITRETactic.PERSISTENCE.value,
+        ),
         "T1542": ("Pre-OS Boot", "Pre-OS persistence", MITRETactic.PERSISTENCE.value),
         "T1542.003": ("Bootkit", "MBR/VBR infection", MITRETactic.PERSISTENCE.value),
-        
         # Privilege Escalation
-        "T1068": ("Exploitation for Privilege Escalation", "Exploit for privesc", MITRETactic.PRIVILEGE_ESCALATION.value),
-        "T1134": ("Access Token Manipulation", "Token manipulation", MITRETactic.PRIVILEGE_ESCALATION.value),
-        "T1134.001": ("Token Impersonation/Theft", "Token impersonation", MITRETactic.PRIVILEGE_ESCALATION.value),
-        "T1548": ("Abuse Elevation Control Mechanism", "Bypass UAC", MITRETactic.PRIVILEGE_ESCALATION.value),
-        "T1548.002": ("Bypass User Account Control", "UAC bypass", MITRETactic.PRIVILEGE_ESCALATION.value),
-        
+        "T1068": (
+            "Exploitation for Privilege Escalation",
+            "Exploit for privesc",
+            MITRETactic.PRIVILEGE_ESCALATION.value,
+        ),
+        "T1134": (
+            "Access Token Manipulation",
+            "Token manipulation",
+            MITRETactic.PRIVILEGE_ESCALATION.value,
+        ),
+        "T1134.001": (
+            "Token Impersonation/Theft",
+            "Token impersonation",
+            MITRETactic.PRIVILEGE_ESCALATION.value,
+        ),
+        "T1548": (
+            "Abuse Elevation Control Mechanism",
+            "Bypass UAC",
+            MITRETactic.PRIVILEGE_ESCALATION.value,
+        ),
+        "T1548.002": (
+            "Bypass User Account Control",
+            "UAC bypass",
+            MITRETactic.PRIVILEGE_ESCALATION.value,
+        ),
         # Defense Evasion
-        "T1055": ("Process Injection", "Inject code into processes", MITRETactic.DEFENSE_EVASION.value),
-        "T1055.001": ("Dynamic-link Library Injection", "DLL injection", MITRETactic.DEFENSE_EVASION.value),
+        "T1055": (
+            "Process Injection",
+            "Inject code into processes",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
+        "T1055.001": (
+            "Dynamic-link Library Injection",
+            "DLL injection",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
         "T1055.012": ("Process Hollowing", "Process hollowing", MITRETactic.DEFENSE_EVASION.value),
-        "T1027": ("Obfuscated Files or Information", "Obfuscation", MITRETactic.DEFENSE_EVASION.value),
+        "T1027": (
+            "Obfuscated Files or Information",
+            "Obfuscation",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
         "T1027.002": ("Software Packing", "Packing/compression", MITRETactic.DEFENSE_EVASION.value),
-        "T1027.005": ("Indicator Removal from Tools", "Remove signatures", MITRETactic.DEFENSE_EVASION.value),
+        "T1027.005": (
+            "Indicator Removal from Tools",
+            "Remove signatures",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
         "T1036": ("Masquerading", "Disguise as legitimate", MITRETactic.DEFENSE_EVASION.value),
         "T1070": ("Indicator Removal", "Delete artifacts", MITRETactic.DEFENSE_EVASION.value),
-        "T1070.001": ("Clear Windows Event Logs", "Clear event logs", MITRETactic.DEFENSE_EVASION.value),
-        "T1140": ("Deobfuscate/Decode Files", "Runtime decoding", MITRETactic.DEFENSE_EVASION.value),
+        "T1070.001": (
+            "Clear Windows Event Logs",
+            "Clear event logs",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
+        "T1140": (
+            "Deobfuscate/Decode Files",
+            "Runtime decoding",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
         "T1562": ("Impair Defenses", "Disable security tools", MITRETactic.DEFENSE_EVASION.value),
-        "T1562.001": ("Disable or Modify Tools", "Disable AV/EDR", MITRETactic.DEFENSE_EVASION.value),
-        "T1574": ("Hijack Execution Flow", "Execution hijacking", MITRETactic.DEFENSE_EVASION.value),
-        "T1574.002": ("DLL Side-Loading", "DLL search order hijacking", MITRETactic.DEFENSE_EVASION.value),
-        "T1620": ("Reflective Code Loading", "Memory-only execution", MITRETactic.DEFENSE_EVASION.value),
-        
+        "T1562.001": (
+            "Disable or Modify Tools",
+            "Disable AV/EDR",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
+        "T1574": (
+            "Hijack Execution Flow",
+            "Execution hijacking",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
+        "T1574.002": (
+            "DLL Side-Loading",
+            "DLL search order hijacking",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
+        "T1620": (
+            "Reflective Code Loading",
+            "Memory-only execution",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
         # Credential Access
         "T1003": ("OS Credential Dumping", "Dump credentials", MITRETactic.CREDENTIAL_ACCESS.value),
         "T1003.001": ("LSASS Memory", "Dump LSASS", MITRETactic.CREDENTIAL_ACCESS.value),
         "T1003.002": ("Security Account Manager", "Dump SAM", MITRETactic.CREDENTIAL_ACCESS.value),
         "T1003.003": ("NTDS", "Dump Active Directory", MITRETactic.CREDENTIAL_ACCESS.value),
         "T1110": ("Brute Force", "Password guessing", MITRETactic.CREDENTIAL_ACCESS.value),
-        "T1555": ("Credentials from Password Stores", "Extract from password managers", MITRETactic.CREDENTIAL_ACCESS.value),
-        "T1555.003": ("Credentials from Web Browsers", "Browser credentials", MITRETactic.CREDENTIAL_ACCESS.value),
-        
+        "T1555": (
+            "Credentials from Password Stores",
+            "Extract from password managers",
+            MITRETactic.CREDENTIAL_ACCESS.value,
+        ),
+        "T1555.003": (
+            "Credentials from Web Browsers",
+            "Browser credentials",
+            MITRETactic.CREDENTIAL_ACCESS.value,
+        ),
         # Discovery
         "T1087": ("Account Discovery", "Enumerate accounts", MITRETactic.DISCOVERY.value),
         "T1046": ("Network Service Discovery", "Discover services", MITRETactic.DISCOVERY.value),
         "T1082": ("System Information Discovery", "System info", MITRETactic.DISCOVERY.value),
         "T1083": ("File and Directory Discovery", "Enumerate files", MITRETactic.DISCOVERY.value),
-        "T1018": ("Remote System Discovery", "Discover remote systems", MITRETactic.DISCOVERY.value),
-        "T1049": ("System Network Connections Discovery", "Enumerate connections", MITRETactic.DISCOVERY.value),
+        "T1018": (
+            "Remote System Discovery",
+            "Discover remote systems",
+            MITRETactic.DISCOVERY.value,
+        ),
+        "T1049": (
+            "System Network Connections Discovery",
+            "Enumerate connections",
+            MITRETactic.DISCOVERY.value,
+        ),
         "T1057": ("Process Discovery", "Enumerate processes", MITRETactic.DISCOVERY.value),
         "T1012": ("Query Registry", "Query Windows Registry", MITRETactic.DISCOVERY.value),
-        
         # Lateral Movement
         "T1021": ("Remote Services", "Use remote services", MITRETactic.LATERAL_MOVEMENT.value),
         "T1021.001": ("Remote Desktop Protocol", "RDP", MITRETactic.LATERAL_MOVEMENT.value),
-        "T1021.002": ("SMB/Windows Admin Shares", "SMB/admin shares", MITRETactic.LATERAL_MOVEMENT.value),
+        "T1021.002": (
+            "SMB/Windows Admin Shares",
+            "SMB/admin shares",
+            MITRETactic.LATERAL_MOVEMENT.value,
+        ),
         "T1021.006": ("Windows Remote Management", "WinRM", MITRETactic.LATERAL_MOVEMENT.value),
         "T1570": ("Lateral Tool Transfer", "Transfer tools", MITRETactic.LATERAL_MOVEMENT.value),
-        
         # Collection
         "T1005": ("Data from Local System", "Local data collection", MITRETactic.COLLECTION.value),
-        "T1039": ("Data from Network Shared Drive", "Network share data", MITRETactic.COLLECTION.value),
+        "T1039": (
+            "Data from Network Shared Drive",
+            "Network share data",
+            MITRETactic.COLLECTION.value,
+        ),
         "T1056": ("Input Capture", "Capture input", MITRETactic.COLLECTION.value),
         "T1056.001": ("Keylogging", "Capture keystrokes", MITRETactic.COLLECTION.value),
         "T1113": ("Screen Capture", "Screenshots", MITRETactic.COLLECTION.value),
         "T1115": ("Clipboard Data", "Clipboard contents", MITRETactic.COLLECTION.value),
-        
         # Command and Control
-        "T1071": ("Application Layer Protocol", "App layer C2", MITRETactic.COMMAND_AND_CONTROL.value),
+        "T1071": (
+            "Application Layer Protocol",
+            "App layer C2",
+            MITRETactic.COMMAND_AND_CONTROL.value,
+        ),
         "T1071.001": ("Web Protocols", "HTTP/HTTPS C2", MITRETactic.COMMAND_AND_CONTROL.value),
         "T1071.004": ("DNS", "DNS C2", MITRETactic.COMMAND_AND_CONTROL.value),
         "T1573": ("Encrypted Channel", "Encrypted C2", MITRETactic.COMMAND_AND_CONTROL.value),
         "T1090": ("Proxy", "Proxy C2", MITRETactic.COMMAND_AND_CONTROL.value),
-        "T1095": ("Non-Application Layer Protocol", "Non-app layer C2", MITRETactic.COMMAND_AND_CONTROL.value),
+        "T1095": (
+            "Non-Application Layer Protocol",
+            "Non-app layer C2",
+            MITRETactic.COMMAND_AND_CONTROL.value,
+        ),
         "T1132": ("Data Encoding", "Encode C2 data", MITRETactic.COMMAND_AND_CONTROL.value),
-        
         # Exfiltration
         "T1041": ("Exfiltration Over C2 Channel", "Exfil over C2", MITRETactic.EXFILTRATION.value),
-        "T1048": ("Exfiltration Over Alternative Protocol", "Alt protocol exfil", MITRETactic.EXFILTRATION.value),
-        "T1048.003": ("Exfiltration Over Unencrypted Non-C2 Protocol", "Unencrypted exfil", MITRETactic.EXFILTRATION.value),
-        "T1567": ("Exfiltration Over Web Service", "Web service exfil", MITRETactic.EXFILTRATION.value),
-        "T1567.002": ("Exfiltration to Cloud Storage", "Cloud storage exfil", MITRETactic.EXFILTRATION.value),
-        
+        "T1048": (
+            "Exfiltration Over Alternative Protocol",
+            "Alt protocol exfil",
+            MITRETactic.EXFILTRATION.value,
+        ),
+        "T1048.003": (
+            "Exfiltration Over Unencrypted Non-C2 Protocol",
+            "Unencrypted exfil",
+            MITRETactic.EXFILTRATION.value,
+        ),
+        "T1567": (
+            "Exfiltration Over Web Service",
+            "Web service exfil",
+            MITRETactic.EXFILTRATION.value,
+        ),
+        "T1567.002": (
+            "Exfiltration to Cloud Storage",
+            "Cloud storage exfil",
+            MITRETactic.EXFILTRATION.value,
+        ),
         # Impact
         "T1486": ("Data Encrypted for Impact", "Ransomware", MITRETactic.IMPACT.value),
         "T1490": ("Inhibit System Recovery", "Delete backups", MITRETactic.IMPACT.value),
@@ -188,48 +322,146 @@ def _init_techniques():
         "T1491": ("Defacement", "Modify content", MITRETactic.IMPACT.value),
         "T1561": ("Disk Wipe", "Wipe disk", MITRETactic.IMPACT.value),
     }
-    
+
     for tech_id, (name, desc, tactic) in attack_data.items():
         MITRE_ATTACK_TECHNIQUES[tech_id] = MITRETechnique(
-            tech_id, name, desc, tactic,
+            tech_id,
+            name,
+            desc,
+            tactic,
             ["Windows", "Linux", "macOS"],
             ["Process", "File", "Network Traffic"],
-            is_atlas=False
+            is_atlas=False,
         )
-    
+
     # === MITRE ATLAS (AI/ML) ===
     atlas_data = {
-        "AML.T0024": ("Exfiltration via ML Inference API", "Extract info via ML API", MITREATLASTactic.ML_MODEL_ACCESS.value),
-        "AML.T0025": ("Exfiltration via Cyber Means", "Traditional ML data exfil", MITREATLASTactic.ML_MODEL_ACCESS.value),
-        "AML.T0043": ("Craft Adversarial Data", "Create adversarial examples", MITREATLASTactic.ML_ATTACK_STAGING.value),
-        "AML.T0044": ("Full ML Model Access", "Complete model access", MITREATLASTactic.ML_ATTACK_STAGING.value),
-        "AML.T0045": ("Verify Attack", "Test adversarial examples", MITREATLASTactic.ML_ATTACK_STAGING.value),
-        "AML.T0001": ("Valid Accounts", "Access ML systems", MITREATLASTactic.INITIAL_ACCESS_ML.value),
-        "AML.T0002": ("Phishing", "Phishing for ML access", MITREATLASTactic.INITIAL_ACCESS_ML.value),
-        "AML.T0015": ("Evade ML Model", "Evade ML detection", MITREATLASTactic.ML_ATTACK_EXECUTION.value),
-        "AML.T0040": ("ML Enabled Products", "Abuse ML features", MITREATLASTactic.ML_ATTACK_EXECUTION.value),
-        "AML.T0018": ("Backdoor ML Model", "Insert ML backdoor", MITREATLASTactic.PERSISTENCE_ML.value),
-        "AML.T0019": ("Poison Training Data", "Inject malicious training data", MITREATLASTactic.PERSISTENCE_ML.value),
-        "AML.T0006": ("Active Scanning", "Scan ML systems", MITREATLASTactic.DEFENSE_EVASION_ML.value),
-        "AML.T0042": ("Adversarial Example Injection", "Inject adversarial examples", MITREATLASTactic.DEFENSE_EVASION_ML.value),
-        "AML.T0010": ("ML Model Inference API Access", "Access ML endpoints", MITREATLASTactic.DISCOVERY_ML.value),
-        "AML.T0012": ("Discover ML Model Family", "Identify model type", MITREATLASTactic.DISCOVERY_ML.value),
-        "AML.T0013": ("Discover ML Model Ontology", "Discover classification ontology", MITREATLASTactic.DISCOVERY_ML.value),
-        "AML.T0003": ("Discover Training Data", "Access training data", MITREATLASTactic.COLLECTION_ML.value),
-        "AML.T0029": ("Acquire Public ML Artifacts", "Download public models", MITREATLASTactic.COLLECTION_ML.value),
-        "AML.T0017": ("Erode ML Model Integrity", "Degrade model performance", MITREATLASTactic.ML_ATTACK_IMPACT.value),
-        "AML.T0020": ("ML Model Inversion", "Extract training data", MITREATLASTactic.ML_ATTACK_IMPACT.value),
-        "AML.T0021": ("ML Model Theft", "Steal model weights", MITREATLASTactic.ML_ATTACK_IMPACT.value),
-        "AML.T0051": ("LLM Prompt Injection", "Inject malicious prompts", MITREATLASTactic.EXFILTRATION_ML.value),
-        "AML.T0052": ("LLM Jailbreak", "Bypass LLM restrictions", MITREATLASTactic.EXFILTRATION_ML.value),
+        "AML.T0024": (
+            "Exfiltration via ML Inference API",
+            "Extract info via ML API",
+            MITREATLASTactic.ML_MODEL_ACCESS.value,
+        ),
+        "AML.T0025": (
+            "Exfiltration via Cyber Means",
+            "Traditional ML data exfil",
+            MITREATLASTactic.ML_MODEL_ACCESS.value,
+        ),
+        "AML.T0043": (
+            "Craft Adversarial Data",
+            "Create adversarial examples",
+            MITREATLASTactic.ML_ATTACK_STAGING.value,
+        ),
+        "AML.T0044": (
+            "Full ML Model Access",
+            "Complete model access",
+            MITREATLASTactic.ML_ATTACK_STAGING.value,
+        ),
+        "AML.T0045": (
+            "Verify Attack",
+            "Test adversarial examples",
+            MITREATLASTactic.ML_ATTACK_STAGING.value,
+        ),
+        "AML.T0001": (
+            "Valid Accounts",
+            "Access ML systems",
+            MITREATLASTactic.INITIAL_ACCESS_ML.value,
+        ),
+        "AML.T0002": (
+            "Phishing",
+            "Phishing for ML access",
+            MITREATLASTactic.INITIAL_ACCESS_ML.value,
+        ),
+        "AML.T0015": (
+            "Evade ML Model",
+            "Evade ML detection",
+            MITREATLASTactic.ML_ATTACK_EXECUTION.value,
+        ),
+        "AML.T0040": (
+            "ML Enabled Products",
+            "Abuse ML features",
+            MITREATLASTactic.ML_ATTACK_EXECUTION.value,
+        ),
+        "AML.T0018": (
+            "Backdoor ML Model",
+            "Insert ML backdoor",
+            MITREATLASTactic.PERSISTENCE_ML.value,
+        ),
+        "AML.T0019": (
+            "Poison Training Data",
+            "Inject malicious training data",
+            MITREATLASTactic.PERSISTENCE_ML.value,
+        ),
+        "AML.T0006": (
+            "Active Scanning",
+            "Scan ML systems",
+            MITREATLASTactic.DEFENSE_EVASION_ML.value,
+        ),
+        "AML.T0042": (
+            "Adversarial Example Injection",
+            "Inject adversarial examples",
+            MITREATLASTactic.DEFENSE_EVASION_ML.value,
+        ),
+        "AML.T0010": (
+            "ML Model Inference API Access",
+            "Access ML endpoints",
+            MITREATLASTactic.DISCOVERY_ML.value,
+        ),
+        "AML.T0012": (
+            "Discover ML Model Family",
+            "Identify model type",
+            MITREATLASTactic.DISCOVERY_ML.value,
+        ),
+        "AML.T0013": (
+            "Discover ML Model Ontology",
+            "Discover classification ontology",
+            MITREATLASTactic.DISCOVERY_ML.value,
+        ),
+        "AML.T0003": (
+            "Discover Training Data",
+            "Access training data",
+            MITREATLASTactic.COLLECTION_ML.value,
+        ),
+        "AML.T0029": (
+            "Acquire Public ML Artifacts",
+            "Download public models",
+            MITREATLASTactic.COLLECTION_ML.value,
+        ),
+        "AML.T0017": (
+            "Erode ML Model Integrity",
+            "Degrade model performance",
+            MITREATLASTactic.ML_ATTACK_IMPACT.value,
+        ),
+        "AML.T0020": (
+            "ML Model Inversion",
+            "Extract training data",
+            MITREATLASTactic.ML_ATTACK_IMPACT.value,
+        ),
+        "AML.T0021": (
+            "ML Model Theft",
+            "Steal model weights",
+            MITREATLASTactic.ML_ATTACK_IMPACT.value,
+        ),
+        "AML.T0051": (
+            "LLM Prompt Injection",
+            "Inject malicious prompts",
+            MITREATLASTactic.EXFILTRATION_ML.value,
+        ),
+        "AML.T0052": (
+            "LLM Jailbreak",
+            "Bypass LLM restrictions",
+            MITREATLASTactic.EXFILTRATION_ML.value,
+        ),
     }
-    
+
     for tech_id, (name, desc, tactic) in atlas_data.items():
         MITRE_ATLAS_TECHNIQUES[tech_id] = MITRETechnique(
-            tech_id, name, desc, tactic,
+            tech_id,
+            name,
+            desc,
+            tactic,
             ["ML System", "LLM"],
             ["API Logs", "ML Inference Logs"],
-            is_atlas=True
+            is_atlas=True,
         )
 
 

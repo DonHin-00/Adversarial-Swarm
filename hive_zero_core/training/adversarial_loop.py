@@ -77,11 +77,23 @@ def train_hive_mind_adversarial(
     red_params = list(hive.gating_network.parameters())
     blue_params = []
     for expert in hive.experts:
-        if expert.name in ("Cartographer", "DeepScope", "Chronos",
-                           "Sentinel", "PayloadGen", "Mutator",
-                           "Mimic", "Ghost", "Stego", "Cleaner",
-                           "Tarpit", "FeedbackLoop", "Flashbang", "GlassHouse",
-                           "PreAttackBooster"):
+        if expert.name in (
+            "Cartographer",
+            "DeepScope",
+            "Chronos",
+            "Sentinel",
+            "PayloadGen",
+            "Mutator",
+            "Mimic",
+            "Ghost",
+            "Stego",
+            "Cleaner",
+            "Tarpit",
+            "FeedbackLoop",
+            "Flashbang",
+            "GlassHouse",
+            "PreAttackBooster",
+        ):
             red_params.extend(list(expert.parameters()))
         elif expert.name in ("WAF", "EDR", "SIEM", "IDS"):
             blue_params.extend(list(expert.parameters()))
@@ -89,12 +101,8 @@ def train_hive_mind_adversarial(
     num_epochs_val = config.training.num_epochs
     red_optimizer = optim.Adam(red_params, lr=lr)
     blue_optimizer = optim.Adam(blue_params, lr=lr)
-    red_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        red_optimizer, T_max=num_epochs_val
-    )
-    blue_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        blue_optimizer, T_max=num_epochs_val
-    )
+    red_scheduler = optim.lr_scheduler.CosineAnnealingLR(red_optimizer, T_max=num_epochs_val)
+    blue_scheduler = optim.lr_scheduler.CosineAnnealingLR(blue_optimizer, T_max=num_epochs_val)
 
     # 3. Reward function
     reward_calc = CompositeReward()
@@ -104,8 +112,8 @@ def train_hive_mind_adversarial(
 
         # --- Environment step (mocked) ---
         mock_logs = [
-            {'src_ip': '192.168.1.1', 'dst_ip': '10.0.0.5', 'port': 80, 'proto': 6},
-            {'src_ip': '10.0.0.5', 'dst_ip': '8.8.8.8', 'port': 53, 'proto': 17},
+            {"src_ip": "192.168.1.1", "dst_ip": "10.0.0.5", "port": 80, "proto": 6},
+            {"src_ip": "10.0.0.5", "dst_ip": "8.8.8.8", "port": 53, "proto": 17},
         ]
 
         # ==============================================================
@@ -131,9 +139,7 @@ def train_hive_mind_adversarial(
             topology = results["topology"].to(device)
             current_entropy = float(torch.mean(torch.abs(topology)).item())
             r_info = reward_calc.calculate_info_gain_reward(0.8, current_entropy)
-            red_loss = red_loss - torch.tensor(
-                r_info, device=device, dtype=torch.float32
-            )
+            red_loss = red_loss - torch.tensor(r_info, device=device, dtype=torch.float32)
 
         # Stealth reward
         if "traffic_shape" in results:
@@ -206,9 +212,7 @@ def train_hive_mind_adversarial(
 
         # Save checkpoint periodically
         if (epoch + 1) % config.training.save_frequency == 0:
-            checkpoint_path = (
-                config.training.checkpoint_dir / f"checkpoint_epoch_{epoch + 1}.pt"
-            )
+            checkpoint_path = config.training.checkpoint_dir / f"checkpoint_epoch_{epoch + 1}.pt"
             save_checkpoint(hive, red_optimizer, epoch, red_loss.item(), checkpoint_path)
             logger.info(f"Checkpoint saved to {checkpoint_path}")
 
@@ -228,12 +232,15 @@ def save_checkpoint(
 ):
     """Save a training checkpoint."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'loss': loss,
-    }, path)
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "loss": loss,
+        },
+        path,
+    )
 
 
 def load_checkpoint(
@@ -248,18 +255,18 @@ def load_checkpoint(
         The epoch number from the checkpoint.
     """
     checkpoint = torch.load(path, map_location="cpu", weights_only=True)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    return checkpoint['epoch']
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    return checkpoint["epoch"]
 
 
 if __name__ == "__main__":
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
     # Quick test with 2 epochs
     from hive_zero_core.training.config import get_quick_test_config
+
     config = get_quick_test_config()
     train_hive_mind_adversarial(config=config)

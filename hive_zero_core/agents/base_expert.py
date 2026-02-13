@@ -17,7 +17,9 @@ class BaseExpert(nn.Module, ABC):
     and gradient checkpointing support for memory-efficient training.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, name: str = "BaseExpert", hidden_dim: int = 64):
+    def __init__(
+        self, observation_dim: int, action_dim: int, name: str = "BaseExpert", hidden_dim: int = 64
+    ):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
@@ -38,7 +40,12 @@ class BaseExpert(nn.Module, ABC):
         """Enable gradient checkpointing for memory-efficient training."""
         self._use_checkpoint = True
 
-    def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        context: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         Standardized forward pass for all experts.
         Enforces Gating Logic (Sparse MoE).
@@ -69,9 +76,8 @@ class BaseExpert(nn.Module, ABC):
                 # to avoid checkpoint errors with non-Tensor inputs.
                 def _run_forward_impl(input_x: torch.Tensor) -> torch.Tensor:
                     return self._forward_impl(input_x, context, mask)
-                return torch.utils.checkpoint.checkpoint(
-                    _run_forward_impl, x, use_reentrant=False
-                )
+
+                return torch.utils.checkpoint.checkpoint(_run_forward_impl, x, use_reentrant=False)
             return self._forward_impl(x, context, mask)
         except Exception as e:
             self.logger.error(f"Error in {self.name} forward pass: {str(e)}")

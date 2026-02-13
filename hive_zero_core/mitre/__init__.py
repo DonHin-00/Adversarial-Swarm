@@ -22,12 +22,12 @@ from .mitre_mapping import (
 )
 
 __all__ = [
-    'MITRETactic',
-    'MITREATLASTactic',
-    'MITRETechnique',
-    'MITRE_ATTACK_TECHNIQUES',
-    'MITRE_ATLAS_TECHNIQUES',
-    'get_technique',
-    'get_techniques_by_tactic',
-    'get_all_techniques',
+    "MITRETactic",
+    "MITREATLASTactic",
+    "MITRETechnique",
+    "MITRE_ATTACK_TECHNIQUES",
+    "MITRE_ATLAS_TECHNIQUES",
+    "get_technique",
+    "get_techniques_by_tactic",
+    "get_all_techniques",
 ]

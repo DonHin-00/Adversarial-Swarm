@@ -12,9 +12,7 @@ class SpectralNormLinear(nn.Module):
 
     def __init__(self, in_features: int, out_features: int):
         super().__init__()
-        self.linear = nn.utils.parametrizations.spectral_norm(
-            nn.Linear(in_features, out_features)
-        )
+        self.linear = nn.utils.parametrizations.spectral_norm(nn.Linear(in_features, out_features))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.linear(x)
@@ -29,8 +27,9 @@ class Agent_Mimic(BaseExpert):
     linear layers stabilises GAN training and prevents mode collapse.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64,
-                 noise_dim: int = 32):
+    def __init__(
+        self, observation_dim: int, action_dim: int, hidden_dim: int = 64, noise_dim: int = 32
+    ):
         super().__init__(observation_dim, action_dim, name="Mimic", hidden_dim=hidden_dim)
         self.noise_dim = noise_dim
 
@@ -40,8 +39,9 @@ class Agent_Mimic(BaseExpert):
         self.norm1 = nn.LayerNorm(hidden_dim)
         self.norm2 = nn.LayerNorm(hidden_dim)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         batch_size = x.size(0)
         noise = torch.randn(batch_size, self.noise_dim, device=x.device)
         inp = torch.cat([x, noise], dim=1)
@@ -86,8 +86,9 @@ class Agent_Ghost(BaseExpert):
         # Residual projection
         self.res_proj = nn.Linear(observation_dim, action_dim)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         features = self.feature_net(x)
         scores = self.score_head(features)
 
@@ -108,8 +109,9 @@ class Agent_Stego(BaseExpert):
     making the encoded signal harder to distinguish from noise.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dim: int = 64,
-                 latent_dim: int = 16):
+    def __init__(
+        self, observation_dim: int, action_dim: int, hidden_dim: int = 64, latent_dim: int = 16
+    ):
         super().__init__(observation_dim, action_dim, name="Stego", hidden_dim=hidden_dim)
         self.latent_dim = latent_dim
 
@@ -137,8 +139,9 @@ class Agent_Stego(BaseExpert):
             return mu + eps * std
         return mu
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         h = self.enc_shared(x)
         mu = self.mu_head(h)
         logvar = self.logvar_head(h)
@@ -180,8 +183,9 @@ class Agent_Cleaner(BaseExpert):
         # Residual skip
         self.res_proj = nn.Linear(observation_dim, hidden_dim)
 
-    def _forward_impl(self, x: torch.Tensor, context: Optional[torch.Tensor],
-                      mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _forward_impl(
+        self, x: torch.Tensor, context: Optional[torch.Tensor], mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         h = self.block1(x)
         h = self.block2(h) + self.res_proj(x)  # Residual
         return self.head(h)

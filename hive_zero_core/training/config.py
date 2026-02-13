@@ -107,8 +107,9 @@ class ExperimentConfig:
         assert self.model.action_dim > 0, "action_dim must be positive"
         assert self.training.num_epochs > 0, "num_epochs must be positive"
         assert self.training.learning_rate > 0, "learning_rate must be positive"
-        assert 1 <= self.model.top_k_experts <= self.model.num_experts, \
-            "top_k_experts must be between 1 and num_experts"
+        assert (
+            1 <= self.model.top_k_experts <= self.model.num_experts
+        ), "top_k_experts must be between 1 and num_experts"
 
     def to_dict(self) -> Dict:
         """Convert configuration to dictionary."""

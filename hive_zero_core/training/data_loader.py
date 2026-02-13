@@ -58,13 +58,14 @@ class NetworkLogDataset:
 
         # Common network patterns
         src_ips = [
-            "192.168.1.1", "192.168.1.2", "192.168.1.100",
-            "10.0.0.1", "10.0.0.5", "172.16.0.1"
+            "192.168.1.1",
+            "192.168.1.2",
+            "192.168.1.100",
+            "10.0.0.1",
+            "10.0.0.5",
+            "172.16.0.1",
         ]
-        dst_ips = [
-            "10.0.0.5", "8.8.8.8", "1.1.1.1",
-            "172.217.0.0", "142.250.0.0"
-        ]
+        dst_ips = ["10.0.0.5", "8.8.8.8", "1.1.1.1", "172.217.0.0", "142.250.0.0"]
         ports = [80, 443, 53, 22, 3389, 8080, 8443]
         protocols = [6, 17]  # TCP, UDP
         events = ["connection", "request", "response", "error", "timeout"]
@@ -125,7 +126,7 @@ class NetworkLogDataset:
 
     def _load_json(self, filepath: Path) -> List[Dict]:
         """Load logs from JSON file."""
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             data = json.load(f)
 
         # Handle both {"logs": [...]} and [...] formats
@@ -143,7 +144,7 @@ class NetworkLogDataset:
     def _load_jsonl(self, filepath: Path) -> List[Dict]:
         """Load logs from JSONL file (one JSON object per line)."""
         logs = []
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:
@@ -160,7 +161,7 @@ class NetworkLogDataset:
     def _load_csv(self, filepath: Path) -> List[Dict]:
         """Load logs from CSV file."""
         logs = []
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 logs.append(dict(row))
