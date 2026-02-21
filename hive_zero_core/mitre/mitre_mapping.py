@@ -321,6 +321,111 @@ def _init_techniques():
         "T1485": ("Data Destruction", "Destroy data", MITRETactic.IMPACT.value),
         "T1491": ("Defacement", "Modify content", MITRETactic.IMPACT.value),
         "T1561": ("Disk Wipe", "Wipe disk", MITRETactic.IMPACT.value),
+        "T1489": ("Service Stop", "Stop security services", MITRETactic.IMPACT.value),
+        "T1657": ("Financial Theft", "Steal cryptocurrency or funds", MITRETactic.IMPACT.value),
+        # Resource Development (ATT&CK v18 additions)
+        "T1583": (
+            "Acquire Infrastructure",
+            "Acquire servers/domains for ops",
+            MITRETactic.RESOURCE_DEVELOPMENT.value,
+        ),
+        "T1583.001": (
+            "Domains",
+            "Register attacker-controlled domains",
+            MITRETactic.RESOURCE_DEVELOPMENT.value,
+        ),
+        "T1584": (
+            "Compromise Infrastructure",
+            "Compromise third-party infrastructure",
+            MITRETactic.RESOURCE_DEVELOPMENT.value,
+        ),
+        "T1588": (
+            "Obtain Capabilities",
+            "Obtain tools/exploits for operations",
+            MITRETactic.RESOURCE_DEVELOPMENT.value,
+        ),
+        "T1588.002": (
+            "Tool",
+            "Obtain offensive security tools",
+            MITRETactic.RESOURCE_DEVELOPMENT.value,
+        ),
+        # Reconnaissance (ATT&CK v18 additions)
+        "T1593": (
+            "Search Open Websites/Domains",
+            "Search public sites for target info",
+            MITRETactic.RECONNAISSANCE.value,
+        ),
+        "T1589": (
+            "Gather Victim Identity Information",
+            "Collect employee/credential info",
+            MITRETactic.RECONNAISSANCE.value,
+        ),
+        # Execution (ATT&CK v18 / container additions)
+        "T1648": (
+            "Serverless Execution",
+            "Abuse serverless functions for execution",
+            MITRETactic.EXECUTION.value,
+        ),
+        "T1609": (
+            "Container Administration Command",
+            "Abuse container admin interfaces",
+            MITRETactic.EXECUTION.value,
+        ),
+        # Persistence (ATT&CK v18 / CI-CD additions)
+        "T1053.007": (
+            "Container Orchestration Job",
+            "Kubernetes CronJob persistence",
+            MITRETactic.PERSISTENCE.value,
+        ),
+        "T1098": (
+            "Account Manipulation",
+            "Manipulate accounts to maintain access",
+            MITRETactic.PERSISTENCE.value,
+        ),
+        "T1098.001": (
+            "Additional Cloud Credentials",
+            "Add credentials to cloud accounts",
+            MITRETactic.PERSISTENCE.value,
+        ),
+        # Privilege Escalation (container)
+        "T1611": (
+            "Escape to Host",
+            "Escape container to host OS",
+            MITRETactic.PRIVILEGE_ESCALATION.value,
+        ),
+        # Defense Evasion (CI/CD, container)
+        "T1612": (
+            "Build Image on Host",
+            "Build malicious container image on host",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
+        "T1610": (
+            "Deploy Container",
+            "Deploy malicious container",
+            MITRETactic.DEFENSE_EVASION.value,
+        ),
+        # Discovery (container/Kubernetes)
+        "T1613": (
+            "Container and Resource Discovery",
+            "Enumerate container resources",
+            MITRETactic.DISCOVERY.value,
+        ),
+        # Supply Chain
+        "T1195": (
+            "Supply Chain Compromise",
+            "Compromise software supply chain",
+            MITRETactic.INITIAL_ACCESS.value,
+        ),
+        "T1195.002": (
+            "Compromise Software Supply Chain",
+            "Inject malicious code into software",
+            MITRETactic.INITIAL_ACCESS.value,
+        ),
+        "T1195.003": (
+            "Compromise Hardware Supply Chain",
+            "Insert malicious firmware/hardware",
+            MITRETactic.INITIAL_ACCESS.value,
+        ),
     }
 
     for tech_id, (name, desc, tactic) in attack_data.items():
@@ -451,6 +556,107 @@ def _init_techniques():
             "Bypass LLM restrictions",
             MITREATLASTactic.EXFILTRATION_ML.value,
         ),
+        # ATLAS 2026: Agentic AI techniques
+        "AML.T0097": (
+            "AI Agent Takeover",
+            "Hijack autonomous AI agent execution context",
+            MITREATLASTactic.ML_ATTACK_EXECUTION.value,
+        ),
+        "AML.T0098": (
+            "Malicious Dependency Injection",
+            "Inject malicious packages into AI pipeline",
+            MITREATLASTactic.ML_ATTACK_STAGING.value,
+        ),
+        "AML.T0099": (
+            "LLM Meta-Prompt Extraction",
+            "Extract hidden system prompts from LLMs",
+            MITREATLASTactic.COLLECTION_ML.value,
+        ),
+        "AML.T0100": (
+            "Indirect Prompt Injection",
+            "Embed adversarial instructions in retrieved content",
+            MITREATLASTactic.ML_ATTACK_EXECUTION.value,
+        ),
+        "AML.T0101": (
+            "Multimodal Adversarial Input",
+            "Craft adversarial inputs across image, audio, and text modalities",
+            MITREATLASTactic.ML_ATTACK_STAGING.value,
+        ),
+        "AML.T0102": (
+            "Model Context Protocol Abuse",
+            "Exploit MCP tool-calling interfaces for unauthorized actions",
+            MITREATLASTactic.ML_ATTACK_EXECUTION.value,
+        ),
+        "AML.T0103": (
+            "AI Agent C2",
+            "Use compromised AI agent as covert command-and-control relay",
+            MITREATLASTactic.ML_ATTACK_EXECUTION.value,
+        ),
+        "AML.T0104": (
+            "Training Data Extraction",
+            "Extract memorized training data through repeated queries",
+            MITREATLASTactic.COLLECTION_ML.value,
+        ),
+        "AML.T0105": (
+            "AI Pipeline Poisoning",
+            "Corrupt data preprocessing or feature engineering steps",
+            MITREATLASTactic.PERSISTENCE_ML.value,
+        ),
+        "AML.T0106": (
+            "Model Weight Tampering",
+            "Directly modify model weights to introduce backdoor behavior",
+            MITREATLASTactic.PERSISTENCE_ML.value,
+        ),
+        "AML.T0107": (
+            "Embedding Space Manipulation",
+            "Alter embedding representations to affect downstream classification",
+            MITREATLASTactic.DEFENSE_EVASION_ML.value,
+        ),
+        "AML.T0108": (
+            "RAG Poisoning",
+            "Inject malicious documents into retrieval-augmented generation context",
+            MITREATLASTactic.PERSISTENCE_ML.value,
+        ),
+        "AML.T0109": (
+            "Function Calling Abuse",
+            "Manipulate LLM function-calling to invoke unauthorized external actions",
+            MITREATLASTactic.ML_ATTACK_EXECUTION.value,
+        ),
+        "AML.T0110": (
+            "AI Supply Chain Attack",
+            "Compromise pre-trained models or datasets in supply chain",
+            MITREATLASTactic.INITIAL_ACCESS_ML.value,
+        ),
+        "AML.T0111": (
+            "Membership Inference Attack",
+            "Determine if specific data was used in model training",
+            MITREATLASTactic.DISCOVERY_ML.value,
+        ),
+        "AML.T0112": (
+            "Model Fingerprinting",
+            "Identify model architecture and hyperparameters via black-box queries",
+            MITREATLASTactic.DISCOVERY_ML.value,
+        ),
+        "AML.T0113": (
+            "Federated Learning Poisoning",
+            "Inject poisoned updates into federated learning aggregation",
+            MITREATLASTactic.PERSISTENCE_ML.value,
+        ),
+        "AML.T0114": (
+            "AI Denial of Service",
+            "Exhaust model resources with adversarial high-cost queries",
+            MITREATLASTactic.ML_ATTACK_IMPACT.value,
+        ),
+        "AML.T0115": (
+            "Gradient Leakage Attack",
+            "Reconstruct training data from shared gradients in distributed training",
+            MITREATLASTactic.COLLECTION_ML.value,
+        ),
+        "AML.T0116": (
+            "Adversarial Patch",
+            "Create physical adversarial patches to fool vision models in the real world",
+            MITREATLASTactic.ML_ATTACK_STAGING.value,
+        ),
     }
 
     for tech_id, (name, desc, tactic) in atlas_data.items():
@@ -489,4 +695,4 @@ def get_all_techniques() -> Dict[str, MITRETechnique]:
     return {**MITRE_ATTACK_TECHNIQUES, **MITRE_ATLAS_TECHNIQUES}
 
 
-# Total: 100+ MITRE ATT&CK Enterprise + 23 MITRE ATLAS = 120+ techniques
+# Total: 111 MITRE ATT&CK Enterprise (including v18 CI/CD, container, supply-chain) + 43 MITRE ATLAS (including 2026 agentic AI) = 154 techniques

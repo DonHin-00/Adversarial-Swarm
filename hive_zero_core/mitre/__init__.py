@@ -8,6 +8,7 @@ Includes:
 - MITRE ATT&CK Enterprise (200+ techniques)
 - MITRE ATLAS (AI/ML adversarial techniques)
 - Technique-to-Capability mappings
+- MITREQueryTool for lookups, recommendations, and coverage analysis
 """
 
 from .mitre_mapping import (
@@ -20,6 +21,7 @@ from .mitre_mapping import (
     get_techniques_by_tactic,
     get_all_techniques,
 )
+from .query_tools import MITREQueryTool
 
 __all__ = [
     "MITRETactic",
@@ -30,4 +32,5 @@ __all__ = [
     "get_technique",
     "get_techniques_by_tactic",
     "get_all_techniques",
+    "MITREQueryTool",
 ]

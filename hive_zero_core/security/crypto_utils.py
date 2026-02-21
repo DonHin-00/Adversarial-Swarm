@@ -18,13 +18,11 @@ from datetime import datetime, timedelta
 # Try to import AES from Cryptodome (pycryptodome) or Crypto (pycrypto)
 try:
     from Crypto.Cipher import AES
-    from Crypto.Util.Padding import pad, unpad
 
     HAS_CRYPTO = True
 except ImportError:
     try:
         from Cryptodome.Cipher import AES
-        from Cryptodome.Util.Padding import pad, unpad
 
         HAS_CRYPTO = True
     except ImportError:
@@ -542,7 +540,7 @@ class SecureKeyManager:
         # Decode and verify all 4 layers
         secret = encoder.decode(encoded, metadata)
 
-        logger.info(f"Secret decoded successfully")
+        logger.info("Secret decoded successfully")
         return secret
 
     def secure_wipe(self):
