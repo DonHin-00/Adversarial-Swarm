@@ -806,25 +806,30 @@ class Agent_WAFBypass(BaseExpert):
 
             # Prioritize successful techniques
             if successful:
-                adapted_chains = []
+                success_chains = []
+                clean_chains = []
                 for chain in base_chains:
-                    # Boost chains with successful techniques
-                    success_count = sum(1 for t in chain if t in successful)
-                    if success_count > 0:
-                        adapted_chains.insert(0, chain)  # Put at front
-                    elif not any(t in blocked for t in chain):
-                        adapted_chains.append(chain)
+                    # Boost chains with successful techniques using fast set membership
+                    if not successful.isdisjoint(chain):
+                        success_chains.append(chain)
+                    elif blocked.isdisjoint(chain):
+                        clean_chains.append(chain)
 
-                if adapted_chains:
-                    return adapted_chains
+                if success_chains or clean_chains:
+                    # Maintain original insert(0) behavior by reversing success_chains
+                    return success_chains[::-1] + clean_chains
 
             # Filter out blocked techniques
             if blocked:
                 adapted_chains = []
                 for chain in base_chains:
-                    filtered_chain = [t for t in chain if t not in blocked]
-                    if filtered_chain:  # Only add if chain has techniques left
-                        adapted_chains.append(filtered_chain)
+                    # Optimization: Use isdisjoint for fast check before list comprehension
+                    if blocked.isdisjoint(chain):
+                        adapted_chains.append(chain)
+                    else:
+                        filtered_chain = [t for t in chain if t not in blocked]
+                        if filtered_chain:  # Only add if chain has techniques left
+                            adapted_chains.append(filtered_chain)
 
                 if adapted_chains:
                     return adapted_chains
