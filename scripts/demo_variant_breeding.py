@@ -19,7 +19,6 @@ from hive_zero_core.agents.variant_breeding import (
     IntelligenceHub, VariantBreeder
 )
 from hive_zero_core.agents.swarm_fusion import SwarmUnit
-from hive_zero_core.agents.capability_escalation import CapabilityTier
 
 print("=" * 80)
 print("VARIANT BREEDING SYSTEM DEMONSTRATION")
