@@ -136,7 +136,7 @@ def test_faraday_cage():
         assert '_payload' in wrapper, "Missing payload"
         print(f"✓ Wrapper type: {wrapper['type']}")
         print(f"✓ Appears as: network_metrics with latency, packets, bandwidth")
-    except:
+    except Exception:
         print("✗ Failed to parse steganographic wrapper")
         raise
     

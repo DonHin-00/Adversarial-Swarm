@@ -238,7 +238,7 @@ def demo_faraday_cage_concept():
         print(f"   Metrics: {wrapper['metrics']}")
         print(f"\n   ✅ Appears to be legitimate network metrics!")
         print(f"   ❌ Actual malicious payload is completely hidden")
-    except:
+    except Exception:
         print(f"   (Binary data, {len(stego_data)} bytes)")
     
     print(f"\n🔓 Decoding reveals original malicious data:")
