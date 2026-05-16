@@ -58,7 +58,7 @@ class SwarmUnit:
     def _generate_id(self) -> str:
         """Generate unique ID for this unit."""
         content = f"{self.genome}{self.generation}{SecureRandom.random_float()}"
-        return hashlib.md5(content.encode()).hexdigest()[:12]
+        return hashlib.sha256(content.encode()).hexdigest()[:12]
 
     def __repr__(self):
         member_count = len(self.members) if self.members else 1
